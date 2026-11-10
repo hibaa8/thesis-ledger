@@ -84,6 +84,7 @@ async function page(name) {
     .forEach((el) => el.classList.toggle("active", el.dataset.page === name));
   $("breadcrumb").textContent = {
     chat: "Research chat",
+    forecast: "Forecast",
     research: "Research desk",
     memory: "Thesis ledger",
     runs: "Research history",
@@ -235,9 +236,9 @@ function render() {
   chart();
   details();
 }
-function chart() {
-  const bars = run.snapshot.bars.slice(-range),
-    f = run.forecast.points,
+function chart(result = run, target = "chart", window = range) {
+  const bars = result.snapshot.bars.slice(-window),
+    f = result.forecast.points,
     all = [...bars.map((b) => b.close), ...f.flatMap((p) => [p.low, p.high])];
   let lo = Math.min(...all) * 0.98,
     hi = Math.max(...all) * 1.02;
@@ -254,7 +255,7 @@ function chart() {
       pts
         .map((p, i) => (i ? "L" : "M") + p.map((v) => v.toFixed(2)).join(","))
         .join(" ");
-  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Observed closing prices and forecast scenario range"><defs><linearGradient id="fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#83e0bd" stop-opacity=".12"/><stop offset="1" stop-color="#83e0bd" stop-opacity="0"/></linearGradient></defs>`;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Observed closing prices and forecast scenario range"><defs><linearGradient id="${target}-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#83e0bd" stop-opacity=".12"/><stop offset="1" stop-color="#83e0bd" stop-opacity="0"/></linearGradient></defs>`;
   for (let i = 0; i < 5; i++) {
     const v = lo + ((hi - lo) * i) / 4;
     svg += `<line x1="${left}" y1="${y(v)}" x2="${W - right}" y2="${y(v)}" stroke="#263037" stroke-dasharray="3 5"/><text x="${W - right + 12}" y="${y(v) + 4}" fill="#7e8e98" font-size="10" font-family="monospace">${fmt(v)}</text>`;
@@ -267,7 +268,7 @@ function chart() {
     ...f.map((p, i) => [x(bars.length + i), y(p.high)]),
     ...f.map((p, i) => [x(bars.length + i), y(p.low)]).reverse(),
   ];
-  svg += `<path d="${path(history)} L${last[0]},${H - bottom} L${left},${H - bottom} Z" fill="url(#fill)"/><path d="${path(band)} Z" fill="#b7a0f4" opacity=".13"/><line x1="${last[0]}" x2="${last[0]}" y1="${top}" y2="${H - bottom}" stroke="#73877e" stroke-dasharray="3 4"/><path d="${path(history)}" fill="none" stroke="#83e0bd" stroke-width="2"/><path d="${path(med)}" fill="none" stroke="#b7a0f4" stroke-width="2" stroke-dasharray="5 4"/>`;
+  svg += `<path d="${path(history)} L${last[0]},${H - bottom} L${left},${H - bottom} Z" fill="url(#${target}-fill)"/><path d="${path(band)} Z" fill="#b7a0f4" opacity=".13"/><line x1="${last[0]}" x2="${last[0]}" y1="${top}" y2="${H - bottom}" stroke="#73877e" stroke-dasharray="3 4"/><path d="${path(history)}" fill="none" stroke="#83e0bd" stroke-width="2"/><path d="${path(med)}" fill="none" stroke="#b7a0f4" stroke-width="2" stroke-dasharray="5 4"/>`;
   [0, Math.floor(bars.length / 2), bars.length - 1, n - 1].forEach((i) => {
     const d = i < bars.length ? bars[i].date : f.at(-1).date;
     svg += `<text x="${x(i)}" y="${H - 7}" text-anchor="${i === 0 ? "start" : i === n - 1 ? "end" : "middle"}" fill="#7e8e98" font-size="10" font-family="monospace">${esc(d.slice(5))}</text>`;
@@ -278,7 +279,7 @@ function chart() {
   f.forEach((p, i) => {
     svg += `<circle cx="${x(bars.length + i)}" cy="${y(p.median)}" r="6" fill="transparent"><title>${esc(p.date)} · Median $${fmt(p.median)} · Range $${fmt(p.low)}–$${fmt(p.high)}</title></circle>`;
   });
-  $("chart").innerHTML = svg + "</svg>";
+  $(target).innerHTML = svg + "</svg>";
 }
 document.querySelectorAll("[data-range]").forEach(
   (b) =>
@@ -572,5 +573,34 @@ $("chat-form").onsubmit = async (e) => {
     chatBusy = false;
     $("chat-send").disabled = false;
     $("new-chat").disabled = false;
+  }
+};
+
+$("forecast-form").onsubmit = async (e) => {
+  e.preventDefault();
+  $("forecast-submit").disabled = true;
+  $("forecast-chart").replaceChildren();
+  $("forecast-caption").textContent = "";
+  $("forecast-status").textContent = "Fetching daily bars and sampling Kronos paths…";
+  try {
+    const result = await api("/forecast", {
+      method: "POST",
+      body: JSON.stringify({
+        ticker: $("forecast-ticker").value.trim().toUpperCase(),
+        horizon: Number($("forecast-horizon").value),
+        mode: $("forecast-mode").value,
+        forecast: "kronos",
+      }),
+    });
+    chart(result, "forecast-chart", 40);
+    $("forecast-status").textContent =
+      result.request.ticker + " · " + result.forecast.label + " · " +
+      (result.request.mode === "demo" ? "Synthetic demo" : result.snapshot.provider) +
+      " · Last bar " + result.snapshot.bars.at(-1).date;
+    $("forecast-caption").textContent = result.forecast.disclaimer;
+  } catch (err) {
+    $("forecast-status").textContent = err.message;
+  } finally {
+    $("forecast-submit").disabled = false;
   }
 };

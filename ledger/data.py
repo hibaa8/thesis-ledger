@@ -100,7 +100,7 @@ def demo_snapshot(ticker, as_of):
     )
 
 
-async def snapshot(req):
+async def snapshot(req, *, include_research_sources=True):
     if req.mode == "demo":
         return demo_snapshot(req.ticker, req.as_of)
     key = os.getenv("ALPHAVANTAGE_API_KEY")
@@ -161,7 +161,9 @@ async def snapshot(req):
             "Daily bars are unadjusted. Corporate actions can distort forecasts.",
             "Social sentiment is unavailable; news is not a proxy for social sentiment.",
         ]
-        if req.as_of == date.today():
+        if not include_research_sources:
+            pass
+        elif req.as_of == date.today():
             for function, kind, params in [
                 ("OVERVIEW", "fundamentals", dict(symbol=req.ticker)),
                 (

@@ -19,6 +19,7 @@
       <div class="nav-caption">WORKSPACE</div>
       <nav aria-label="Main navigation">
         <button data-page="chat">Research chat</button>
+        <button data-page="forecast">Forecast</button>
         <button data-page="research" class="active">
           ◈ <span>Research desk</span><kbd>01</kbd></button
         ><button data-page="memory">
@@ -53,6 +54,25 @@
           ><button id="auth-button" class="quiet">Access token</button>
         </div>
       </header>
+      <main id="forecast" class="page">
+        <div class="eyebrow">KRONOS-SMALL</div>
+        <h1>Price scenarios</h1>
+        <p class="subtitle">Explore sampled paths for the next trading sessions from completed daily bars.</p>
+        <section class="panel chat-panel">
+          <form id="forecast-form" class="chat-toolbar">
+            <label for="forecast-ticker">Ticker</label>
+            <input id="forecast-ticker" value="NVDA" maxlength="10" required />
+            <label for="forecast-horizon">Sessions</label>
+            <input id="forecast-horizon" type="number" min="1" max="20" value="5" required />
+            <label for="forecast-mode">Data</label>
+            <select id="forecast-mode"><option value="live">Market data</option><option value="demo">Synthetic demo</option></select>
+            <button id="forecast-submit" type="submit">Run Kronos</button>
+          </form>
+          <p id="forecast-status" role="status"></p>
+          <div id="forecast-chart"></div>
+          <p id="forecast-caption"></p>
+        </section>
+      </main>
       <main id="chat" class="page">
         <div class="eyebrow">MARKET RESEARCH</div>
         <h1>Research chat</h1>
