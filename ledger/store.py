@@ -14,6 +14,68 @@ def now():
     return datetime.now(timezone.utc).isoformat()
 
 
+def memory_body(run):
+    body = {
+        "thesis": run["decision"]["summary"],
+        "stance": run["decision"]["stance"],
+        "invalidation": run["decision"]["invalidation"],
+        "evidence_ids": run["decision"]["evidence_ids"],
+        "regime": run["metrics"]["regime"],
+        "scope": "Source asset, date, and evidence only; not a general trading rule.",
+    }
+    return json.dumps(body, sort_keys=True)
+
+
+def rank_memories(rows, revisions, ticker, mode, as_of, query, limit):
+    terms = set(re.findall(r"\w+", query.lower()))
+    out = []
+    for row in rows:
+        m = dict(row)
+        if ticker and m["ticker"] != ticker or mode and m["mode"] != mode:
+            continue
+        # Both availability and market date matter. A retrospective run is not old knowledge.
+        if as_of and (m["as_of"] > as_of or m["created"][:10] > as_of):
+            continue
+        m["body"] = json.loads(m["body"])
+        m["revisions"] = [
+            r
+            for r in revisions
+            if r["memory_id"] == m["id"]
+            and (not as_of or r["created"][:10] <= as_of)
+        ]
+        if m["revisions"]:
+            m["scope"] = m["revisions"][-1]["scope"]
+            if m["scope"] == "retire" and as_of:
+                continue
+        out.append(m)
+    # SimpleMem-inspired sparse retrieval after symbolic time and scope filters.
+    docs = [Counter(re.findall(r"\w+", json.dumps(m["body"]).lower())) for m in out]
+    lengths = [sum(doc.values()) for doc in docs]
+    avg = sum(lengths) / len(lengths) if lengths else 1
+    frequency = {term: sum(term in doc for doc in docs) for term in terms}
+    for memory, doc, length in zip(out, docs, lengths):
+        memory["relevance"] = sum(
+            math.log1p(
+                (len(docs) - frequency[term] + 0.5) / (frequency[term] + 0.5)
+            )
+            * (doc[term] * 2.2)
+            / (doc[term] + 1.2 * (0.25 + 0.75 * length / avg))
+            for term in terms
+            if doc[term]
+        )
+    return sorted(out, key=lambda m: (m["relevance"], m["created"]), reverse=True)[
+        :limit
+    ]
+
+def open_store(directory=None):
+    local = Store(directory)
+    if directory is None and (url := os.getenv("LEDGER_DATABASE_URL")):
+        from .postgres_store import PostgresStore
+
+        return PostgresStore(local, url)
+    return local
+
+
 class Store:
     def __init__(self, directory=None):
         self.path = (
@@ -36,6 +98,9 @@ class Store:
             CREATE TABLE IF NOT EXISTS revisions(id TEXT PRIMARY KEY, memory_id TEXT, created TEXT,
                 scope TEXT, feedback TEXT);
             """)
+
+    def for_visitor(self, visitor):
+        return Store(self.path.parent / "visitors" / visitor)
 
     def connect(self):
         db = sqlite3.connect(self.path, timeout=20)
@@ -91,15 +156,7 @@ class Store:
             )
 
     def remember(self, run):
-        body = {
-            "thesis": run["decision"]["summary"],
-            "stance": run["decision"]["stance"],
-            "invalidation": run["decision"]["invalidation"],
-            "evidence_ids": run["decision"]["evidence_ids"],
-            "regime": run["metrics"]["regime"],
-            "scope": "Source asset, date, and evidence only; not a general trading rule.",
-        }
-        text = json.dumps(body, sort_keys=True)
+        text = memory_body(run)
         with self.connect() as db:
             db.execute(
                 "INSERT OR IGNORE INTO memories VALUES(?,?,?,?,?,?,?,?)",
@@ -121,45 +178,7 @@ class Store:
             revisions = [
                 dict(r) for r in db.execute("SELECT * FROM revisions ORDER BY created")
             ]
-        terms = set(re.findall(r"\w+", query.lower()))
-        out = []
-        for row in rows:
-            m = dict(row)
-            if ticker and m["ticker"] != ticker or mode and m["mode"] != mode:
-                continue
-            # Both availability and market date matter. A retrospective run is not old knowledge.
-            if as_of and (m["as_of"] > as_of or m["created"][:10] > as_of):
-                continue
-            m["body"] = json.loads(m["body"])
-            m["revisions"] = [
-                r
-                for r in revisions
-                if r["memory_id"] == m["id"]
-                and (not as_of or r["created"][:10] <= as_of)
-            ]
-            if m["revisions"]:
-                m["scope"] = m["revisions"][-1]["scope"]
-                if m["scope"] == "retire" and as_of:
-                    continue
-            out.append(m)
-        # SimpleMem-inspired sparse retrieval after symbolic time and scope filters.
-        docs = [Counter(re.findall(r"\w+", json.dumps(m["body"]).lower())) for m in out]
-        lengths = [sum(doc.values()) for doc in docs]
-        avg = sum(lengths) / len(lengths) if lengths else 1
-        frequency = {term: sum(term in doc for doc in docs) for term in terms}
-        for memory, doc, length in zip(out, docs, lengths):
-            memory["relevance"] = sum(
-                math.log1p(
-                    (len(docs) - frequency[term] + 0.5) / (frequency[term] + 0.5)
-                )
-                * (doc[term] * 2.2)
-                / (doc[term] + 1.2 * (0.25 + 0.75 * length / avg))
-                for term in terms
-                if doc[term]
-            )
-        return sorted(out, key=lambda m: (m["relevance"], m["created"]), reverse=True)[
-            :limit
-        ]
+        return rank_memories(rows, revisions, ticker, mode, as_of, query, limit)
 
     def revise(self, memory_id, feedback, scope):
         with self.connect() as db:

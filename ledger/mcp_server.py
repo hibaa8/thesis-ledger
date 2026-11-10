@@ -5,7 +5,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from .harness import Harness
 from .models import ResearchRequest, ReviewRequest
-from .store import Store
+from .store import open_store
 from .quotes import Quotes
 from .market import MarketBrief
 
@@ -45,7 +45,7 @@ def create_mcp(store=None, harness=None, quotes=None, market=None, *, market_onl
     if market_only:
         return mcp
 
-    store = store or Store()
+    store = store or open_store()
     harness = harness or Harness(store)
 
     @mcp.tool()

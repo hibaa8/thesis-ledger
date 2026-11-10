@@ -5,12 +5,12 @@ from .agents import analyze
 from .data import snapshot, metrics, validate_bars
 from .forecast import forecast_bounded, walk_forward
 from .models import ResearchRequest
-from .store import Store, now
+from .store import open_store, now
 
 
 class Harness:
     def __init__(self, store=None):
-        self.store = store or Store()
+        self.store = store or open_store()
         self.lock = asyncio.Lock()
 
     async def run(self, request=None, resume_id=None):

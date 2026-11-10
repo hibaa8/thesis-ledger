@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from .harness import Harness
 from .models import ResearchRequest, ReviewRequest
-from .store import Store
+from .store import open_store
 from .mcp_server import create_mcp
 
 WEB = Path(__file__).resolve().parent / "web"
@@ -38,7 +38,7 @@ class ChatRequest(BaseModel):
 
 def create_app(directory=None):
     load_config()
-    store = Store(directory)
+    store = open_store(directory)
     harness = Harness(store)
     quotes = Quotes()
     market = MarketBrief(quotes)
@@ -120,7 +120,7 @@ def create_app(directory=None):
 
     def visitor_store(request):
         visitor = request.state.visitor
-        return Store(store.path.parent / "visitors" / visitor) if visitor else store
+        return store.for_visitor(visitor) if visitor else store
 
     def visitor_harness(request):
         if not request.state.visitor:
