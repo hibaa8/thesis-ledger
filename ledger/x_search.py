@@ -78,9 +78,10 @@ async def x_post_evidence(client, ticker, as_of):
                     "to_date": (as_of + timedelta(days=1)).isoformat(),
                 }],
                 "max_turns": 2,
+                "max_output_tokens": 800,
                 "store": False,
             },
-            timeout=12,
+            timeout=httpx.Timeout(75, connect=8),
         )
         response.raise_for_status()
         return cited_posts(response.json(), start, as_of)
