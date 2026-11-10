@@ -504,7 +504,6 @@ api("/config")
     $("signout-form").hidden = !c.signed_in;
     sharedLedger = c.shared_ledger;
     $("research-public-note").hidden = !sharedLedger;
-    $("chat-public-note").hidden = !sharedLedger;
     $("ledger-access-note").textContent = sharedLedger
       ? "This ledger is public. Completed research and its source reports are visible to every visitor."
       : c.signed_in
