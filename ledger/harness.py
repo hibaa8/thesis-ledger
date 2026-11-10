@@ -13,6 +13,19 @@ class Harness:
         self.store = store or open_store()
         self.lock = asyncio.Lock()
 
+    def new_run(self, request):
+        state = dict(
+            id=uuid.uuid4().hex,
+            created=now(),
+            status="running",
+            request=request.model_dump(mode="json"),
+            reports={},
+            trace=[],
+            calls=0,
+        )
+        self.store.save(state)
+        return state
+
     async def run(self, request=None, resume_id=None):
         async with self.lock:
             return await self._run(request, resume_id)
@@ -26,15 +39,7 @@ class Harness:
             req = ResearchRequest.model_validate(state["request"])
         else:
             req = request
-            state = dict(
-                id=uuid.uuid4().hex,
-                created=now(),
-                status="running",
-                request=req.model_dump(mode="json"),
-                reports={},
-                trace=[],
-                calls=0,
-            )
+            state = self.new_run(req)
         state["status"] = "running"
         state.pop("error", None)
 

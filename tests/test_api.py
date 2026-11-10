@@ -247,3 +247,41 @@ def test_account_report_reopens_after_new_session_and_is_private(tmp_path, monke
             assert other.get("/api/memories").json() == []
             assert other.get(path).status_code == 404
             assert other.get(path + "/export?format=md").status_code == 404
+
+
+def test_background_research_returns_saved_id_before_work_finishes(tmp_path, monkeypatch):
+    import asyncio
+    from ledger.harness import Harness
+
+    monkeypatch.delenv("LEDGER_API_TOKEN", raising=False)
+    monkeypatch.delenv("LEDGER_PUBLIC", raising=False)
+    released = False
+
+    async def slow_run(self, request=None, resume_id=None):
+        nonlocal released
+        state = self.store.get(resume_id)
+        assert state["status"] == "running"
+        await asyncio.sleep(0.1)
+        state["status"] = "complete"
+        self.store.save(state)
+        released = True
+        return state
+
+    monkeypatch.setattr(Harness, "run", slow_run)
+    with TestClient(create_app(tmp_path)) as client:
+        started = client.post("/api/research?background=true", json={"mode": "demo"})
+        assert started.status_code == 202
+        assert not released
+        path = "/api/runs/" + started.json()["id"]
+        progress = client.get(path + "?status_only=true")
+        assert progress.status_code == 200
+        assert progress.json()["status"] == "running"
+        assert client.post("/api/research?background=true", json={"mode": "demo"}).status_code == 409
+        import time
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            if client.get(path).json()["status"] == "complete":
+                break
+            time.sleep(0.02)
+        assert released
+        assert client.get(path).json()["status"] == "complete"

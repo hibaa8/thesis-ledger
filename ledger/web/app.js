@@ -35,7 +35,12 @@ async function apiResponse(path, options = {}) {
 }
 async function api(path, options) {
   const r = await apiResponse(path, options);
-  const data = await r.json();
+  let data;
+  try {
+    data = await r.json();
+  } catch {
+    throw Error("The service returned an unexpected response. Your run may still be saved in Research History. Please retry shortly.");
+  }
   if (!r.ok)
     throw Error(
       typeof data.detail === "string"
@@ -152,10 +157,10 @@ $("research-form").onsubmit = async (e) => {
     };
     if ($("question").value.trim())
       request.question = $("question").value.trim();
-    const result = await api("/research", {
+    const result = await waitForResearch(await api("/research?background=true", {
       method: "POST",
       body: JSON.stringify(request),
-    });
+    }));
     if (selection !== selectionVersion) return;
     $("research-heading").textContent = "Research · " + request.ticker;
     if (result.status === "failed") {
@@ -174,6 +179,17 @@ $("research-form").onsubmit = async (e) => {
     $("run-button").textContent = "Run research ↗";
   }
 };
+async function waitForResearch(result) {
+  if (result.status !== "running") return result;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    const state = await api("/runs/" + encodeURIComponent(result.id) + "?status_only=true");
+    if (state.status !== "running") return await api("/runs/" + encodeURIComponent(result.id));
+    status(`Researching… ${state.stages} agent stages saved. You can reopen this run from Research History.`);
+  }
+  throw Error("This run is taking longer than expected. Open Research History to check its saved progress.");
+}
+
 function sourceTitle(evidence, className = "") {
   const title = esc(evidence.title);
   try {
@@ -395,9 +411,9 @@ function bindRunButtons(container) {
         try {
           let r = await api("/runs/" + b.dataset.openRun);
           if (r.status !== "complete")
-            r = await api("/runs/" + b.dataset.openRun + "/resume", {
+            r = await waitForResearch(await api("/runs/" + b.dataset.openRun + "/resume?background=true", {
               method: "POST",
-            });
+            }));
           if (r.status !== "complete") throw Error(r.error);
           await page("deep");
           ++selectionVersion;

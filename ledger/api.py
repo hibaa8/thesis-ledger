@@ -48,13 +48,20 @@ def create_app(directory=None):
     market = MarketBrief(quotes)
     chat = Chat(store, harness, quotes, market)
     forecast_lock = asyncio.Lock()
+    research_jobs = set()
     mcp = create_mcp(store, harness, quotes, market)
     public_mcp = create_mcp(quotes=quotes, market=market, market_only=True)
 
     @asynccontextmanager
     async def lifespan(app):
         async with mcp.session_manager.run(), public_mcp.session_manager.run():
-            yield
+            try:
+                yield
+            finally:
+                for job in research_jobs:
+                    job.cancel()
+                if research_jobs:
+                    await asyncio.gather(*research_jobs, return_exceptions=True)
 
     mcp_app = mcp.streamable_http_app()
     public_mcp_app = public_mcp.streamable_http_app()
@@ -207,14 +214,37 @@ def create_app(directory=None):
             public_mcp_path="/mcp/public/" if os.getenv("LEDGER_PUBLIC") == "1" else None,
         )
 
+    def research_busy():
+        return bool(research_jobs) or harness.lock.locked()
+
+    async def run_job(scoped, run_id):
+        try:
+            await scoped.run(resume_id=run_id)
+        except asyncio.CancelledError:
+            state = scoped.store.get(run_id)
+            if state["status"] == "running":
+                state["status"] = "failed"
+                state["error"] = "The service restarted. Resume this run from Research History."
+                scoped.store.save(state)
+            raise
+
+    def launch_research(scoped, state):
+        job = asyncio.create_task(run_job(scoped, state["id"]))
+        research_jobs.add(job)
+        job.add_done_callback(research_jobs.discard)
+        return JSONResponse({"id": state["id"], "status": "running"}, status_code=202)
+
     @app.post("/api/research")
-    async def research(req: ResearchRequest, request: Request):
-        if harness.lock.locked():
+    async def research(req: ResearchRequest, request: Request, background: bool = False):
+        if research_busy():
             raise HTTPException(
                 409, "Research already running. Wait for the current run to finish."
             )
         public_charge(request, "research")
-        return await visitor_harness(request).run(req)
+        scoped = visitor_harness(request)
+        if background:
+            return launch_research(scoped, scoped.new_run(req))
+        return await scoped.run(req)
 
     @app.get("/api/market")
     async def market_overview():
@@ -237,7 +267,7 @@ def create_app(directory=None):
             )
         ):
             return saved
-        if harness.lock.locked():
+        if research_busy():
             raise HTTPException(409, "Research is already running.")
         if not config(request)["live_ready"]:
             raise HTTPException(
@@ -259,8 +289,14 @@ def create_app(directory=None):
         ]
 
     @app.get("/api/runs/{run_id}")
-    def run(run_id: str, request: Request):
-        return visitor_store(request).get(run_id)
+    def run(run_id: str, request: Request, status_only: bool = False):
+        state = visitor_store(request).get(run_id)
+        if status_only:
+            return {
+                "id": state["id"], "status": state["status"],
+                "stages": len(state.get("reports", {})), "error": state.get("error"),
+            }
+        return state
 
     @app.get("/api/runs/{run_id}/export")
     def export_run(run_id: str, request: Request, format: Literal["zip", "md"] = "zip"):
@@ -279,12 +315,16 @@ def create_app(directory=None):
         )
 
     @app.post("/api/runs/{run_id}/resume")
-    async def resume(run_id: str, request: Request):
-        if harness.lock.locked():
+    async def resume(run_id: str, request: Request, background: bool = False):
+        if research_busy():
             raise HTTPException(409, "Research already running")
         scoped = visitor_harness(request)
-        scoped.store.get(run_id)
+        state = scoped.store.get(run_id)
+        if state["status"] == "complete":
+            return state
         public_charge(request, "research")
+        if background:
+            return launch_research(scoped, state)
         return await scoped.run(resume_id=run_id)
 
     @app.get("/api/memories")
