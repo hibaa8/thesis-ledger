@@ -14,6 +14,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from .harness import Harness
 from .models import ResearchRequest, ReviewRequest
 from .store import open_store
+from .postgres_store import PostgresStore
 from .mcp_server import create_mcp
 
 WEB = Path(__file__).resolve().parent / "web"
@@ -131,10 +132,20 @@ def create_app(directory=None):
         )
         return response
 
+    def shared_ledger(request):
+        return bool(
+            isinstance(store, PostgresStore)
+            and request.state.visitor
+            and not request.state.account
+            and not auth.enabled
+        )
+
     def visitor_store(request):
         visitor = request.state.visitor
         if account := request.state.account:
             return store.for_account(account)
+        if shared_ledger(request):
+            return store.for_public_research(visitor)
         return store.for_visitor(visitor) if visitor else store
 
     def visitor_harness(request):
@@ -180,6 +191,7 @@ def create_app(directory=None):
         return dict(
             public_visitor=bool(request.state.visitor),
             signed_in=bool(request.state.account),
+            shared_ledger=shared_ledger(request),
             google_sign_in=auth.enabled,
             alpaca_ready=alpaca_ready(),
             live_ready=bool(
@@ -281,6 +293,8 @@ def create_app(directory=None):
 
     @app.post("/api/memories/review")
     def review(req: ReviewRequest, request: Request):
+        if shared_ledger(request):
+            raise HTTPException(403, "Public ledger entries are read-only.")
         return visitor_store(request).revise(req.memory_id, req.feedback, req.scope)
 
     @app.post("/api/forecast")

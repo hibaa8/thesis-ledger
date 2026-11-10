@@ -19,6 +19,9 @@ class PostgresStore:
     def for_visitor(self, visitor):
         return self.local.for_visitor(visitor)
 
+    def for_public_research(self, visitor):
+        return PostgresStore(self.local.for_visitor(visitor), self.url, "public")
+
     def for_account(self, account):
         return PostgresStore(self.local.for_account(account), self.url, f"account:{account}")
 

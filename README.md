@@ -124,3 +124,9 @@ one hour before the app asks the visitor to sign in again. Guest reports use
 a browser session and local storage on the server. Old guest runs are not
 attached to a Google account. Open a completed run from the ledger or
 Research History to view the full report and download its Markdown.
+
+With Google sign-in unconfigured on the public site, visitors share a public
+research ledger in Supabase. Research questions and completed reports are
+visible to all visitors. Chat transcripts stay scoped to each browser.
+Enabling Google sign-in switches new research to private account storage
+for signed-in users and temporary browser sessions for guests.

@@ -7,6 +7,7 @@ const esc = (s) =>
         c
       ],
   );
+let sharedLedger = false;
 let run = null,
   range = 40,
   tab = "debate",
@@ -415,7 +416,7 @@ async function loadMemory() {
     ? memories
         .map(
           (m) =>
-            `<article class="panel memory-card"><div class="top"><strong>${esc(m.ticker)}</strong><span class="chip">${esc(m.mode)}</span><span class="tiny">${esc(m.as_of)}</span><button class="secondary" data-review="${esc(m.id)}">Review memory ↗</button></div><p>${esc(m.body.thesis)}</p><p><strong>Scope:</strong> ${esc(m.body.scope)}</p><p><strong>Invalidation:</strong> ${esc(m.body.invalidation)}</p><button class="secondary" data-open-run="${esc(m.run_id)}">Open source report ↗</button>${m.revisions.map((r) => `<p class="revision">${esc(r.created.slice(0, 10))} · ${esc(r.scope)}<br>${esc(r.feedback)}</p>`).join("")}</article>`,
+            `<article class="panel memory-card"><div class="top"><strong>${esc(m.ticker)}</strong><span class="chip">${esc(m.mode)}</span><span class="tiny">${esc(m.as_of)}</span>${sharedLedger ? "" : `<button class="secondary" data-review="${esc(m.id)}">Review memory ↗</button>`}</div><p>${esc(m.body.thesis)}</p><p><strong>Scope:</strong> ${esc(m.body.scope)}</p><p><strong>Invalidation:</strong> ${esc(m.body.invalidation)}</p><button class="secondary" data-open-run="${esc(m.run_id)}">Open source report ↗</button>${m.revisions.map((r) => `<p class="revision">${esc(r.created.slice(0, 10))} · ${esc(r.scope)}<br>${esc(r.feedback)}</p>`).join("")}</article>`,
         )
         .join("")
     : `<div class="empty">
@@ -498,7 +499,12 @@ api("/config")
     $("account-controls").hidden = !c.google_sign_in;
     $("google-signin").hidden = c.signed_in;
     $("signout-form").hidden = !c.signed_in;
-    $("ledger-access-note").textContent = c.signed_in
+    sharedLedger = c.shared_ledger;
+    $("research-public-note").hidden = !sharedLedger;
+    $("chat-public-note").hidden = !sharedLedger;
+    $("ledger-access-note").textContent = sharedLedger
+      ? "This ledger is public. Completed research and its source reports are visible to every visitor."
+      : c.signed_in
       ? "Your reports and revisions are saved to your account."
       : c.public_visitor ? "Guest reports are temporary. Sign in to keep future research in your private ledger." : "";
     if (new URLSearchParams(location.search).get("signin") === "failed") {
