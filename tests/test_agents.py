@@ -127,6 +127,7 @@ def test_specialists_receive_only_their_evidence(monkeypatch, role, kind, citati
         assert "memories" not in scoped
         report = dict(
             role=role, stance="neutral", summary="Role-specific finding.",
+            stance_reason="The evidence supports no clear direction.",
             evidence_ids=[citation], risks=[], invalidation="Recheck when evidence changes.",
         )
         return httpx.Response(

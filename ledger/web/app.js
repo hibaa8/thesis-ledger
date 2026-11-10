@@ -248,7 +248,10 @@ function render() {
   $("analysts").innerHTML = Object.entries(names)
     .map(([key, name], i) => {
       const r = run.reports[key];
-      return `<article class="analyst"><div class="analyst-top"><span class="agent-icon">0${i + 1}</span><span class="stance ${esc(r.stance)}">${esc(r.stance)}</span></div><h3>${name}</h3><p>${esc(r.summary)}</p>${cites(r.evidence_ids, run.snapshot.evidence)}</article>`;
+      const reason = r.stance_reason?.trim()
+        ? `<p class="stance-reason"><strong>Why ${esc(r.stance)}</strong>${esc(r.stance_reason)}</p>`
+        : '<p class="stance-reason">This report predates saved stance explanations.</p>';
+      return `<article class="analyst"><div class="analyst-top"><span class="agent-icon">0${i + 1}</span><span class="stance ${esc(r.stance)}">${esc(r.stance)}</span></div><h3>${name}</h3>${reason}<p>${esc(r.summary)}</p>${cites(r.evidence_ids, run.snapshot.evidence)}</article>`;
     })
     .join("");
   $("call-count").textContent =

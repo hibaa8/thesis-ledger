@@ -27,6 +27,7 @@ class AgentReport(BaseModel):
     role: str
     stance: Literal["bullish", "bearish", "neutral", "abstain"]
     summary: str = Field(min_length=1, max_length=2200)
+    stance_reason: str = Field(default="", max_length=320)
     evidence_ids: list[str] = Field(max_length=20)
     risks: list[str] = Field(default_factory=list, max_length=8)
     invalidation: str = Field(max_length=600)

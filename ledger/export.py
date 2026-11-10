@@ -81,6 +81,10 @@ def research_markdown(run):
         lines.extend([
             f"## {stage} · {report['stance'].title()}",
             "",
+        ])
+        if reason := report.get("stance_reason"):
+            lines.extend([f"**Why {report['stance']}:** {markdown_text(reason)}", ""])
+        lines.extend([
             markdown_text(report["summary"]),
             "",
             f"**Invalidation:** {markdown_text(report['invalidation'])}",
