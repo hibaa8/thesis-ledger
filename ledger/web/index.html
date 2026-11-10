@@ -138,10 +138,17 @@
             <p id="market-warning" class="subtitle"></p>
           </aside>
         </section>
-        <div class="news-grid">
-          <section aria-label="Selected company news"><h2 id="company-news-heading">NVDA headlines</h2><ul id="company-news" class="market-news"></ul><div id="x-highlights" hidden><h3>From X · saved research</h3><ul id="x-posts" class="market-news"></ul></div></section>
-          <section aria-label="Market headlines"><h2>Market headlines</h2><ul id="market-news" class="market-news"></ul></section>
-        </div>
+        <section class="panel headline-board" aria-labelledby="headlines-title">
+          <div class="headline-board-header">
+            <h2 id="headlines-title">Headlines</h2>
+            <div class="headline-switch" role="group" aria-label="Headline coverage">
+              <button id="company-news-heading" type="button" aria-controls="company-news" aria-pressed="true">NVDA</button>
+              <button id="market-news-button" type="button" aria-controls="market-news" aria-pressed="false">Market</button>
+            </div>
+          </div>
+          <ul id="company-news" class="headline-list" aria-label="Company headlines"></ul>
+          <ul id="market-news" class="headline-list" aria-label="Market headlines" hidden></ul>
+        </section>
       </main>
       <main id="deep" class="page">
         <div class="eyebrow">MULTI-AGENT ANALYSIS</div>

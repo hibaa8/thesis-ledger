@@ -772,21 +772,7 @@ async function refreshMarket() {
     $("market-summary").textContent = measured.length
       ? `${rising} up · ${falling} down · ${measured.length - rising - falling} flat on this watchlist`
       : brief.quotes.length ? "Latest available prices" : "Watchlist prices unavailable.";
-    $("market-news").replaceChildren();
-    for (const article of brief.headlines) {
-      const row = document.createElement("li");
-      const link = document.createElement("a");
-      if (!article.url.startsWith("https://")) continue;
-      link.href = article.url;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      link.textContent = article.title;
-      const meta = document.createElement("small");
-      meta.textContent = article.source + " · " + new Date(article.published).toLocaleString();
-      row.append(link, meta);
-      $("market-news").append(row);
-    }
-    if (!brief.headlines.length) $("market-news").textContent = "No headlines returned.";
+    renderHeadlines("market-news", brief.headlines, "No market headlines available.");
     $("market-warning").textContent = brief.warnings.join(" ");
     if ($("research").classList.contains("active")) {
       clearTimeout(marketTimer);
@@ -818,10 +804,13 @@ async function selectTicker(value) {
   selectedTicker = ticker;
   for (const id of ["ticker", "symbol-search", "forecast-ticker", "chat-ticker"]) $(id).value = ticker;
   $("desk-symbol").textContent = ticker;
-  $("company-news-heading").textContent = ticker + " headlines";
+  $("company-news-heading").textContent = ticker;
+  $("company-news").setAttribute("aria-label", ticker + " headlines");
   $("research-heading").textContent = "Research · " + ticker;
-  $("company-news").textContent = "Loading headlines…";
-  renderXHighlights();
+  companyArticles = [];
+  companyPosts = [];
+  companyNewsEmpty = "Loading company headlines…";
+  renderCompanyHeadlines();
   $("forecast-chart").replaceChildren();
   document.querySelectorAll(".watch-row").forEach((row) =>
     row.setAttribute("aria-pressed", String(row.dataset.symbol === ticker)),
@@ -851,38 +840,60 @@ async function selectTicker(value) {
   }
 }
 
+let companyArticles = [];
+let companyPosts = [];
+let companyNewsEmpty = "Loading company headlines…";
+
+function showHeadlineCoverage(company) {
+  $("company-news-heading").setAttribute("aria-pressed", company);
+  $("market-news-button").setAttribute("aria-pressed", !company);
+  $("company-news").hidden = !company;
+  $("market-news").hidden = company;
+}
+$("company-news-heading").onclick = () => showHeadlineCoverage(true);
+$("market-news-button").onclick = () => showHeadlineCoverage(false);
+
+function renderHeadlines(target, headlines, emptyMessage) {
+  const rows = headlines.map((headline) => {
+    const post = headline.kind === "sentiment";
+    const timestamp = new Date(headline.published);
+    const published = headline.published && Number.isFinite(timestamp.getTime())
+      ? timestamp.toLocaleDateString(undefined, {
+          month: "short", day: "numeric", year: "numeric", ...(post ? { timeZone: "UTC" } : {}),
+        })
+      : "";
+    const source = post ? headline.title.replace(/^X post by /, "") : headline.source;
+    const title = post ? headline.text.replace(/^Grok summary of the cited post: /, "") : headline.title;
+    return `<li class="headline-row"><div class="headline-meta"><span class="headline-type${post ? " headline-type-x" : ""}">${post ? "X post" : "Article"}</span><span>${esc(source)}</span>${published ? `<time datetime="${esc(headline.published)}">${esc(published)}</time>` : ""}</div>${sourceTitle({ title, url: headline.url }, "headline-link")}</li>`;
+  });
+  $(target).innerHTML = rows.join("") || `<li class="headline-empty">${esc(emptyMessage)}</li>`;
+}
+
+function renderCompanyHeadlines() {
+  const publishedAt = (entry) => Date.parse(entry.published) || 0;
+  const headlines = [...companyArticles, ...companyPosts]
+    .sort((a, b) => publishedAt(b) - publishedAt(a));
+  renderHeadlines("company-news", headlines, companyNewsEmpty);
+}
+
 function renderXHighlights(report) {
-  const posts = (report?.snapshot?.evidence || [])
+  companyPosts = (report?.snapshot?.evidence || [])
     .filter((item) => item.kind === "sentiment" && item.id.startsWith("x-post-"))
     .slice(0, 2);
-  $("x-highlights").hidden = !posts.length;
-  $("x-posts").innerHTML = posts.map((post) =>
-    `<li>${sourceTitle(post)}<small>${esc(post.published)} · ${esc(post.text)}</small></li>`,
-  ).join("");
+  renderCompanyHeadlines();
 }
 
 async function loadCompanyNews(ticker, version) {
-  const list = $("company-news");
   try {
     const articles = await api("/news/" + encodeURIComponent(ticker));
     if (version !== selectionVersion) return;
-    list.replaceChildren();
-    for (const article of articles.slice(0, 5)) {
-      const item = document.createElement("li");
-      const link = document.createElement("a");
-      link.href = article.url;
-      link.rel = "noopener noreferrer";
-      link.target = "_blank";
-      link.textContent = article.title;
-      const meta = document.createElement("small");
-      meta.textContent = article.source + " · " + new Date(article.published).toLocaleString();
-      item.append(link, meta);
-      list.append(item);
-    }
-    if (!articles.length) list.textContent = "Alpaca returned no headlines for " + ticker + ".";
+    companyArticles = articles.slice(0, 5);
+    companyNewsEmpty = "No company headlines available.";
   } catch (err) {
-    if (version === selectionVersion) list.textContent = err.message;
+    if (version !== selectionVersion) return;
+    companyNewsEmpty = err.message;
   }
+  renderCompanyHeadlines();
 }
 
 async function refreshIntraday(ticker) {
