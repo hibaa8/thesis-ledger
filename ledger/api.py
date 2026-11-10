@@ -1,6 +1,8 @@
 import asyncio
 import hmac
 import os
+
+import httpx
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlparse
@@ -18,6 +20,8 @@ WEB = Path(__file__).resolve().parent / "web"
 
 from pydantic import BaseModel, Field
 from .chat import Chat
+from .data import snapshot
+from .forecast import forecast_bounded
 from .quotes import Quotes, quote_interval
 from .config import load_config
 
@@ -34,6 +38,7 @@ def create_app(directory=None):
     harness = Harness(store)
     quotes = Quotes()
     chat = Chat(store, harness, quotes)
+    forecast_lock = asyncio.Lock()
     mcp = create_mcp(store, harness, quotes)
 
     @asynccontextmanager
@@ -132,6 +137,29 @@ def create_app(directory=None):
     @app.post("/api/memories/review")
     def review(req: ReviewRequest):
         return store.revise(req.memory_id, req.feedback, req.scope)
+
+    @app.post("/api/forecast")
+    async def forecast(req: ResearchRequest):
+        if not os.getenv("KRONOS_PATH"):
+            raise HTTPException(
+                503, "Configure KRONOS_PATH and install Kronos to run this forecast."
+            )
+        if forecast_lock.locked():
+            raise HTTPException(409, "A forecast is already running.")
+        async with forecast_lock:
+            try:
+                market = await snapshot(req, include_research_sources=False)
+                result = await asyncio.to_thread(
+                    forecast_bounded, market["bars"], req.horizon, "kronos"
+                )
+            except (ValueError, httpx.HTTPError) as exc:
+                detail = (
+                    str(exc)
+                    if isinstance(exc, ValueError)
+                    else "Market data request failed."
+                )
+                raise HTTPException(503, detail) from None
+        return {"forecast": result, "snapshot": market, "request": req.model_dump()}
 
     @app.get("/api/quote/{ticker}")
     async def quote(ticker: str):
