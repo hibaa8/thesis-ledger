@@ -7,15 +7,15 @@ From the project directory:
 ```sh
 mkdir -p vendor
 git clone https://github.com/shiyu-coder/Kronos.git vendor/Kronos
-uv pip install -r vendor/Kronos/requirements.txt
+uv pip install torch einops huggingface-hub tqdm safetensors
 export KRONOS_PATH="$PWD/vendor/Kronos"
 export KRONOS_DEVICE=cpu
-uv run thesis-ledger
+uv run --no-sync thesis-ledger
 ```
 
-If using a virtual environment with pip, substitute `.venv/bin/pip install -r ...`. Record the upstream commit with `git -C vendor/Kronos rev-parse HEAD` for reproducible experiments. The upstream checkout is ignored by Git and not redistributed.
+If using a virtual environment with pip, substitute `.venv/bin/pip install torch einops huggingface-hub tqdm safetensors`. Record the upstream commit with `git -C vendor/Kronos rev-parse HEAD` for reproducible experiments. The upstream checkout is ignored by Git and not redistributed.
 
-Select **Kronos-small** in the forecast menu. First use downloads `NeoQuasar/Kronos-Tokenizer-base` and `NeoQuasar/Kronos-small` from Hugging Face. Network access and several hundred MB of disk/memory may be needed. Set `KRONOS_DEVICE=cuda:0` for a compatible GPU. CPU latency may exceed the orchestration deadline for long horizons.
+Open **Forecast** and select **Run Kronos**. The same engine is available in the Research desk. First use downloads `NeoQuasar/Kronos-Tokenizer-base` and `NeoQuasar/Kronos-small` from Hugging Face. Network access and several hundred MB of disk/memory may be needed. Set `KRONOS_DEVICE=cuda:0` for a compatible GPU. CPU latency may exceed the orchestration deadline for long horizons.
 
 The adapter follows upstream `KronosPredictor.predict`: up to 512 historical OHLCV bars, known future NYSE session timestamps, temperature 1.0, top-p 0.9, one sample per call. Twenty independent calls yield a sample distribution. The median and 10th/90th percentiles summarize that distribution; they are not calibrated probabilities. Amount is omitted rather than falsely supplied as measured turnover; upstream fills optional missing columns.
 
