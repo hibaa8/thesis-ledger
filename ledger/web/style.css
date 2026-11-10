@@ -960,3 +960,14 @@ dialog select {
     gap: 8px;
   }
 }
+
+.chat-panel { padding: clamp(12px, 3vw, 24px); max-width: 960px; }
+.chat-toolbar, .chat-form { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.chat-toolbar input { width: 7rem; }
+.quote-card { padding: 12px; margin: 12px 0; border: 1px solid #355052; border-radius: 8px; }
+.chat-messages { min-height: 240px; max-height: 56vh; overflow-y: auto; padding: 4px; }
+.chat-message { padding: 12px 14px; margin: 10px 0; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 10px; background: #222a33; }
+.chat-message.user { margin-left: 15%; background: #203d3b; }
+.chat-form textarea { flex: 1 1 240px; min-width: 0; resize: vertical; font: inherit; color: inherit; background: #11161b; border: 1px solid #45505a; padding: 10px; border-radius: 8px; }
+.chat-form button, .chat-toolbar button { padding: 9px 12px; border: 1px solid #45505a; border-radius: 8px; background: #203d3b; color: #f0f7f6; cursor: pointer; }
+.chat-status { min-height: 1.5em; margin-bottom: 0; }

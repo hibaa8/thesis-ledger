@@ -18,6 +18,7 @@
       >
       <div class="nav-caption">WORKSPACE</div>
       <nav aria-label="Main navigation">
+        <button data-page="chat">Research chat</button>
         <button data-page="research" class="active">
           ◈ <span>Research desk</span><kbd>01</kbd></button
         ><button data-page="memory">
@@ -52,6 +53,27 @@
           ><button id="auth-button" class="quiet">Access token</button>
         </div>
       </header>
+      <main id="chat" class="page">
+        <div class="eyebrow">MARKET RESEARCH</div>
+        <h1>Research chat</h1>
+        <p class="subtitle">Ask about a price, follow up on a report, or run the analyst team.</p>
+        <section class="panel chat-panel">
+          <div class="chat-toolbar">
+            <label for="chat-ticker">Ticker</label>
+            <input id="chat-ticker" value="NVDA" maxlength="10" aria-label="Chat ticker" />
+            <button id="refresh-quote" type="button">Refresh price</button>
+            <button id="new-chat" type="button">New chat</button>
+          </div>
+          <div id="quote-card" class="quote-card" aria-live="polite">Select a ticker to check its latest price.</div>
+          <div id="chat-messages" class="chat-messages" role="log" aria-label="Conversation"></div>
+          <form id="chat-form" class="chat-form">
+            <textarea id="chat-input" rows="2" maxlength="4000" required aria-label="Message"
+              placeholder="What’s the latest price? Run a research report on NVDA."></textarea>
+            <button id="chat-send" type="submit">Send</button>
+          </form>
+          <p id="chat-status" role="status" class="chat-status"></p>
+        </section>
+      </main>
       <main id="research" class="page active">
         <div class="eyebrow">YOUR MULTI-AGENT RESEARCH DESK</div>
         <div class="title-row">
@@ -236,12 +258,16 @@
               set an access token. See <strong>docs/deployment.md</strong> for
               authentication, persistent storage, and client setup.
             </p>
-            <div class="info">No public endpoint has been deployed.</div>
+
           </section>
         </div>
         <section class="panel prose">
-          <h2>Five tools. One evidence trail.</h2>
+          <h2>Six tools. One evidence trail.</h2>
           <div class="tools-grid">
+            <div>
+              <code>latest_price</code>
+              <p>Get the latest price with its feed and observation time.</p>
+            </div>
             <div>
               <code>research_ticker</code>
               <p>Run analysts, debate, forecasting, and risk review.</p>

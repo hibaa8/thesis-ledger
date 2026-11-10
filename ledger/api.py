@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlparse
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from .harness import Harness
@@ -16,10 +16,25 @@ from .mcp_server import create_mcp
 WEB = Path(__file__).resolve().parent / "web"
 
 
+from pydantic import BaseModel, Field
+from .chat import Chat
+from .quotes import Quotes, quote_interval
+from .config import load_config
+
+
+class ChatRequest(BaseModel):
+    session: str = Field(pattern=r"^[a-f0-9]{32}$")
+    message: str = Field(min_length=1, max_length=4000)
+    ticker: str = Field(default="NVDA", pattern=r"^[A-Z][A-Z0-9.\-]{0,9}$")
+
+
 def create_app(directory=None):
+    load_config()
     store = Store(directory)
     harness = Harness(store)
-    mcp = create_mcp(store, harness)
+    quotes = Quotes()
+    chat = Chat(store, harness, quotes)
+    mcp = create_mcp(store, harness, quotes)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -73,6 +88,8 @@ def create_app(directory=None):
                 and os.getenv("LLM_MODEL")
                 and os.getenv("ALPHAVANTAGE_API_KEY")
             ),
+            chat_ready=bool(os.getenv("LLM_API_KEY")),
+            quote_refresh_seconds=quote_interval(),
             kronos_configured=bool(os.getenv("KRONOS_PATH")),
             model=os.getenv("LLM_MODEL") or "Deterministic demo",
             mcp_path="/mcp/",
@@ -115,6 +132,29 @@ def create_app(directory=None):
     @app.post("/api/memories/review")
     def review(req: ReviewRequest):
         return store.revise(req.memory_id, req.feedback, req.scope)
+
+    @app.get("/api/quote/{ticker}")
+    async def quote(ticker: str):
+        try:
+            return await quotes.get(ticker)
+        except ValueError as exc:
+            raise HTTPException(503, str(exc)) from None
+
+    @app.get("/api/chat/{session}")
+    def history(session: str):
+        return store.chat_history(session)
+
+    @app.post("/api/chat")
+    async def chat_turn(req: ChatRequest):
+        if not os.getenv("LLM_API_KEY"):
+            raise HTTPException(503, "Chat requires a configured OpenAI API key.")
+        if not req.message.strip():
+            raise HTTPException(422, "Enter a message.")
+        return StreamingResponse(
+            chat.stream(req.session, req.message.strip(), req.ticker),
+            media_type="application/x-ndjson",
+            headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+        )
 
     app.mount("/mcp", mcp_app)
     app.mount("/static", StaticFiles(directory=WEB), name="static")

@@ -21,6 +21,9 @@ class Store:
         with self.connect() as db:
             db.executescript("""
             PRAGMA journal_mode=WAL;
+            CREATE TABLE IF NOT EXISTS chat_messages(
+                id INTEGER PRIMARY KEY, session TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL);
+            CREATE INDEX IF NOT EXISTS chat_session ON chat_messages(session, id);
             CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY, created TEXT, state TEXT);
             CREATE TABLE IF NOT EXISTS memories(id TEXT PRIMARY KEY, run_id TEXT UNIQUE, ticker TEXT,
                 mode TEXT, as_of TEXT, created TEXT, body TEXT, digest TEXT);
@@ -131,3 +134,21 @@ class Store:
                 result,
             )
         return result
+
+    def chat_history(self, session, limit=100):
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT role, content FROM chat_messages WHERE session=? ORDER BY id DESC LIMIT ?",
+                (session, limit),
+            ).fetchall()
+        return [dict(row) for row in reversed(rows)]
+
+    def save_chat(self, session, question, answer):
+        with self.connect() as db:
+            db.executemany(
+                "INSERT INTO chat_messages(session, role, content) VALUES(?,?,?)",
+                [
+                    (session, "user", question),
+                    (session, "assistant", answer),
+                ],
+            )
