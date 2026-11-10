@@ -72,7 +72,7 @@ $("auth-button").onclick = () => {
   if (v !== null) {
     token = v;
     sessionStorage.setItem("ledger-token", v);
-    status("Access token updated.");
+    location.reload();
   }
 };
 async function page(name) {
@@ -92,8 +92,15 @@ async function page(name) {
     method: "How it works",
   }[name];
   try {
+    clearTimeout(quoteTimer);
+    clearTimeout(marketTimer);
     if (name === "chat") await openChat();
-    else clearTimeout(quoteTimer);
+    if (name === "research") {
+      refreshMarket();
+      refreshQuote("desk-quote", "ticker", "research");
+    }
+    if (name === "forecast" && !$("forecast-chart").childElementCount
+        && !$("forecast-submit").disabled) $("forecast-form").requestSubmit();
     if (name === "memory") await loadMemory();
     if (name === "runs") await loadRuns();
   } catch (e) {
@@ -438,11 +445,36 @@ $("export").onclick = () => {
   URL.revokeObjectURL(url);
 };
 api("/config")
-  .then((c) => {
+  .then(async (c) => {
     if (!c.live_ready)
       $("mode").options[1].textContent = "Live (setup required)";
     if (!c.kronos_configured)
       $("engine").options[1].textContent = "Kronos (setup required)";
+    refreshMarket();
+    refreshQuote("desk-quote", "ticker", "research");
+    const saved = await api("/dashboard");
+    if (run || $("run-button").disabled) return;
+    if (saved) {
+      run = saved;
+      render();
+      status("Saved live report · " + saved.request.as_of + " · " + saved.snapshot.warnings.join(" "));
+    }
+    if (saved?.request.as_of === localDate) return;
+    if (!c.live_ready) {
+      if (!saved) status("Configure OpenAI and Alpha Vantage to load live analysis.", true);
+      return;
+    }
+    $("run-button").disabled = true;
+    status(saved ? "Refreshing the saved live report…" : "Running the analyst team for NVDA…");
+    try {
+      const fresh = await api("/dashboard", { method: "POST" });
+      if (fresh.status !== "complete") throw Error(fresh.error || "Live research did not finish.");
+      run = fresh;
+      render();
+      status("Live report · " + fresh.request.as_of + " · " + fresh.snapshot.warnings.join(" "));
+    } finally {
+      $("run-button").disabled = false;
+    }
   })
   .catch((e) => status(e.message, true));
 
@@ -483,30 +515,31 @@ async function openChat() {
   refreshQuote();
 }
 
-async function refreshQuote() {
+async function refreshQuote(card = "quote-card", input = "chat-ticker", activePage = "chat") {
   clearTimeout(quoteTimer);
   const request = ++quoteRequest;
-  const ticker = $("chat-ticker").value.trim().toUpperCase();
+  const ticker = $(input).value.trim().toUpperCase();
   if (!/^[A-Z][A-Z0-9.\-]{0,9}$/.test(ticker)) {
-    $("quote-card").textContent = "Enter a valid ticker.";
+    $(card).textContent = "Enter a valid ticker.";
     return;
   }
-  $("quote-card").textContent = "Checking " + ticker + "…";
+  $(card).textContent = "Checking " + ticker + "…";
   try {
     const q = await api("/quote/" + encodeURIComponent(ticker));
     if (request !== quoteRequest) return;
-    $("quote-card").textContent =
+    $(card).textContent =
       q.ticker + "  $" + fmt(q.price) + "  ·  " + q.source + "  ·  " +
       q.freshness + "  ·  " + q.as_of;
-    if (q.refresh_seconds && $("chat").classList.contains("active"))
-      quoteTimer = setTimeout(refreshQuote, q.refresh_seconds * 1000);
+    if (q.refresh_seconds && $(activePage).classList.contains("active"))
+      quoteTimer = setTimeout(() => refreshQuote(card, input, activePage), q.refresh_seconds * 1000);
   } catch (err) {
-    if (request === quoteRequest) $("quote-card").textContent = err.message;
+    if (request === quoteRequest) $(card).textContent = err.message;
   }
 }
 
-$("refresh-quote").onclick = refreshQuote;
-$("chat-ticker").onchange = refreshQuote;
+$("refresh-quote").onclick = () => refreshQuote();
+$("chat-ticker").onchange = () => refreshQuote();
+$("ticker").onchange = () => refreshQuote("desk-quote", "ticker", "research");
 $("new-chat").onclick = () => {
   chatSession = newChatId();
   $("chat-messages").replaceChildren();
@@ -604,3 +637,54 @@ $("forecast-form").onsubmit = async (e) => {
     $("forecast-submit").disabled = false;
   }
 };
+
+let marketTimer;
+async function refreshMarket() {
+  clearTimeout(marketTimer);
+  try {
+    const brief = await api("/market");
+    $("market-quotes").replaceChildren();
+    for (const q of brief.quotes) {
+      const card = document.createElement("div");
+      card.className = "market-quote";
+      const symbol = document.createElement("strong");
+      symbol.textContent = q.ticker + "  $" + fmt(q.price);
+      const change = document.createElement("span");
+      change.className = q.change_percent > 0 ? "market-up" : q.change_percent < 0 ? "market-down" : "";
+      change.textContent = q.change_percent == null ? "Change unavailable" :
+        (q.change_percent > 0 ? "+" : "") + fmt(q.change_percent) + "% vs prior close";
+      const meta = document.createElement("small");
+      meta.textContent = q.source + " · " + q.freshness + " · " + q.as_of;
+      card.append(symbol, change, meta);
+      $("market-quotes").append(card);
+    }
+    const measured = brief.quotes.filter(q => q.change_percent != null);
+    const rising = measured.filter(q => q.change_percent > 0).length;
+    const falling = measured.filter(q => q.change_percent < 0).length;
+    $("market-summary").textContent = measured.length
+      ? `${rising} up · ${falling} down · ${measured.length - rising - falling} flat on this watchlist`
+      : brief.quotes.length ? "Latest available prices" : "Watchlist prices unavailable.";
+    $("market-news").replaceChildren();
+    for (const article of brief.headlines) {
+      const row = document.createElement("li");
+      const link = document.createElement("a");
+      if (!article.url.startsWith("https://")) continue;
+      link.href = article.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = article.title;
+      const meta = document.createElement("small");
+      meta.textContent = article.source + " · " + new Date(article.published).toLocaleString();
+      row.append(link, meta);
+      $("market-news").append(row);
+    }
+    if (!brief.headlines.length) $("market-news").textContent = "No headlines returned.";
+    $("market-warning").textContent = brief.warnings.join(" ");
+    if ($("research").classList.contains("active")) {
+      clearTimeout(marketTimer);
+      marketTimer = setTimeout(refreshMarket, brief.refresh_seconds * 1000);
+    }
+  } catch (err) {
+    $("market-warning").textContent = err.message;
+  }
+}

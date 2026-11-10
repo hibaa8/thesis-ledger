@@ -6,12 +6,14 @@ from .harness import Harness
 from .models import ResearchRequest, ReviewRequest
 from .store import Store
 from .quotes import Quotes
+from .market import MarketBrief
 
 
-def create_mcp(store=None, harness=None, quotes=None):
+def create_mcp(store=None, harness=None, quotes=None, market=None):
     store = store or Store()
     harness = harness or Harness(store)
     quotes = quotes or Quotes()
+    market = market or MarketBrief(quotes)
     hosts = os.getenv("LEDGER_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
     security = TransportSecuritySettings(
         allowed_hosts=[v for h in hosts for v in [h, h + ":*"]],
@@ -80,6 +82,11 @@ def create_mcp(store=None, harness=None, quotes=None):
     async def latest_price(ticker: str) -> dict:
         """Get the latest available price with provider, observation time, and freshness."""
         return await quotes.get(ticker)
+
+    @mcp.tool()
+    async def market_brief() -> dict:
+        """Get broad US equity watchlist moves and recent headlines, with data timestamps."""
+        return await market.get()
 
     return mcp
 

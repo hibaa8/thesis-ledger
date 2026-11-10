@@ -971,3 +971,12 @@ dialog select {
 .chat-form textarea { flex: 1 1 240px; min-width: 0; resize: vertical; font: inherit; color: inherit; background: #11161b; border: 1px solid #45505a; padding: 10px; border-radius: 8px; }
 .chat-form button, .chat-toolbar button { padding: 9px 12px; border: 1px solid #45505a; border-radius: 8px; background: #203d3b; color: #f0f7f6; cursor: pointer; }
 .chat-status { min-height: 1.5em; margin-bottom: 0; }
+
+.market-panel { padding: clamp(12px, 3vw, 24px); margin-bottom: 16px; }
+.market-quotes { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 8px; }
+.market-quote { display: grid; gap: 4px; padding: 10px; border: 1px solid #355052; border-radius: 8px; }
+.market-quote small, .market-news small { display: block; opacity: .75; overflow-wrap: anywhere; }
+.market-up { color: #83e0bd; }
+.market-down { color: #ff9b9b; }
+.market-news { display: grid; gap: 8px; padding-left: 20px; }
+.market-news a { color: #a5e8d0; }
