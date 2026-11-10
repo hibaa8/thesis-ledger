@@ -65,3 +65,5 @@ The app exposes Streamable HTTP MCP at `/mcp/`. It also supports local stdio thr
 - [ReHarness](https://arxiv.org/abs/2610.12668) inspired revisiting prior theses while preserving the evidence behind them.
 
 See [research notes](docs/research.md) for the adaptations and [evaluation notes](docs/evaluation.md) for validation limits. Run the local test suite with `uv run pytest -q`.
+
+The Market desk shows a curated watchlist of index ETFs and large-cap stocks. Select a row or enter another U.S. ticker to change the chart, company headlines, and report. With Alpaca configured, the chart shows five-minute candles for the most recent regular trading session with bars. Company headlines also feed into newly generated research.

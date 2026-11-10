@@ -51,6 +51,10 @@ Back up SQLite using its backup API or while the service is stopped; copying onl
 
 ## Free deployment on Render
 
+For the fastest setup, create a **Blueprint** in Render from this repository and select the branch containing `render.yaml`. It provisions a free Docker web service, generates the dashboard access token, and prompts for OpenAI, Alpha Vantage, and Alpaca credentials. Get the generated `LEDGER_API_TOKEN` from the service's Environment page and enter it using **Access token** in Thesis Ledger. Render provides the allowed hostname automatically.
+
+To configure the service without a Blueprint:
+
 I use a single Docker web service for the UI, chat API, and HTTP MCP. In Render, create a **Web Service** from this repository, select the **Docker** runtime and **Free** instance type, and set the health check path to `/health`. Set these service variables in the dashboard:
 
 - `LEDGER_ALLOWED_HOSTS` to the service hostname, such as `thesis-ledger.onrender.com`.
