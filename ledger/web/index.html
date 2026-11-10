@@ -31,6 +31,8 @@
         </button>
         <button data-page="research" class="active">
           ◈ <span>Research desk</span><kbd>01</kbd></button
+        ><button data-page="deep">
+          ◇ <span>Deep Research</span></button
         ><button data-page="memory">
           ▤ <span>Thesis ledger</span><kbd>02</kbd></button
         ><button data-page="runs">
@@ -58,7 +60,14 @@
           <span class="muted">Workspace</span><span class="slash">/</span
           ><span id="breadcrumb">Research desk</span>
         </div>
+        <div id="account-controls" hidden>
+          <a id="google-signin" href="/auth/google">Sign in with Google</a>
+          <form id="signout-form" action="/api/auth/logout" method="post" hidden>
+            <button class="secondary" type="submit">Sign out</button>
+          </form>
+        </div>
       </header>
+      <p id="signin-status" class="info" role="status" hidden></p>
       <main id="forecast" class="page">
         <div class="eyebrow">MARKET FORECAST</div>
         <h1>Price scenarios</h1>
@@ -104,6 +113,7 @@
             <h1>Market research desk</h1>
             <p class="subtitle">Follow the session, read company news, and research any U.S. stock.</p>
           </div>
+          <button id="desk-deep" class="primary" type="button">Open Deep Research ↗</button>
         </div>
         <section class="market-workspace panel" aria-label="Market desk">
           <div class="intraday-panel">
@@ -136,6 +146,11 @@
           <section aria-label="Selected company news"><h2 id="company-news-heading">NVDA headlines</h2><ul id="company-news" class="market-news"></ul></section>
           <section aria-label="Market headlines"><h2>Market headlines</h2><ul id="market-news" class="market-news"></ul></section>
         </div>
+      </main>
+      <main id="deep" class="page">
+        <div class="eyebrow">MULTI-AGENT ANALYSIS</div>
+        <h1>Deep Research</h1>
+        <p class="subtitle">Send a question to four specialist analysts and review their debate, evidence, and conclusion.</p>
         <h2 id="research-heading">Research · NVDA</h2>
         <form id="research-form" class="research-form">
           <div class="form-top">
@@ -241,10 +256,10 @@
           <section class="panel report-export" aria-labelledby="report-export-title">
             <div>
               <h2 id="report-export-title">Save this report</h2>
-              <p>Download the findings, source links, and supporting data as Markdown and CSV files.</p>
+              <p>Download the analyst findings, debate, key numbers, and source links.</p>
               <p id="export-status" role="status"></p>
             </div>
-            <button id="export" class="secondary" type="button">Download report ZIP</button>
+            <button id="export" class="secondary" type="button">Download report (.md)</button>
           </section>
         </div>
       </main>
@@ -259,6 +274,7 @@
           Memories are hypotheses, not verified facts. Review narrows their
           scope or retires them; it does not establish trading performance.
         </div>
+        <p id="ledger-access-note" class="subtitle"></p>
         <div id="memory-list"></div>
       </main>
       <main id="runs" class="page">

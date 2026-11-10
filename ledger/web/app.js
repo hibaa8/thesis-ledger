@@ -89,6 +89,7 @@ $("auth-form").onsubmit = (event) => {
   location.reload();
 };
 async function page(name) {
+  if (!$(name).classList.contains("active")) window.scrollTo(0, 0);
   document
     .querySelectorAll(".page")
     .forEach((el) => el.classList.toggle("active", el.id === name));
@@ -99,6 +100,7 @@ async function page(name) {
     chat: "Research chat",
     forecast: "Forecast",
     research: "Research desk",
+    deep: "Deep Research",
     memory: "Thesis ledger",
     runs: "Research history",
     connect: "Connect via MCP",
@@ -112,6 +114,7 @@ async function page(name) {
       refreshMarket();
       refreshQuote("desk-quote", "ticker", "research");
       refreshIntraday(selectedTicker);
+      if (!$("company-news").childElementCount) loadCompanyNews(selectedTicker, selectionVersion);
     }
     if (name !== "research") clearTimeout(intradayTimer);
     if (name === "forecast" && !$("forecast-chart").childElementCount
@@ -127,8 +130,10 @@ async function page(name) {
 document
   .querySelectorAll("[data-page]")
   .forEach((b) => (b.onclick = () => page(b.dataset.page)));
+$("desk-deep").onclick = () => page("deep");
 $("research-form").onsubmit = async (e) => {
   e.preventDefault();
+  const selection = ++selectionVersion;
   $("run-button").disabled = true;
   $("run-button").classList.add("loading");
   $("run-button").textContent = "Researching…";
@@ -150,7 +155,8 @@ $("research-form").onsubmit = async (e) => {
       method: "POST",
       body: JSON.stringify(request),
     });
-    if (request.ticker !== selectedTicker) return;
+    if (selection !== selectionVersion) return;
+    $("research-heading").textContent = "Research · " + request.ticker;
     if (result.status === "failed") {
       status(result.error + " Open Research history to resume.", true);
     } else {
@@ -372,7 +378,7 @@ async function loadRuns() {
             `<div class="history-row panel"><strong>${esc(r.request.ticker)}</strong><span class="chip">${esc(r.status)}</span><small>${esc(r.request.as_of)} · ${esc(r.request.mode)} · ${r.request.horizon} sessions</small><button class="secondary" data-open-run="${esc(r.id)}">${r.status === "complete" ? "Open report ↗" : "Resume run ↗"}</button></div>`,
         )
         .join("")
-    : '<div class="empty">No runs yet. Start at the research desk.</div>';
+    : '<div class="empty">No runs yet. Start in Deep Research.</div>';
   bindRunButtons($("run-list"));
 }
 
@@ -388,8 +394,12 @@ function bindRunButtons(container) {
               method: "POST",
             });
           if (r.status !== "complete") throw Error(r.error);
-          await page("research");
-          await selectTicker(r.request.ticker, false, r);
+          await page("deep");
+          ++selectionVersion;
+          $("ticker").value = r.request.ticker;
+          $("research-heading").textContent = "Research · " + r.request.ticker;
+          run = r;
+          render();
           status("Viewing saved research from " + r.request.as_of + ".");
         } catch (e) {
           b.textContent = e.message;
@@ -410,11 +420,11 @@ async function loadMemory() {
         .join("")
     : `<div class="empty">
         <p>Complete a research run to save its thesis, evidence, and invalidation criteria here.</p>
-        <button id="memory-start-research" class="secondary" type="button">Open research desk ↗</button>
+        <button id="memory-start-research" class="secondary" type="button">Open Deep Research ↗</button>
       </div>`;
   if (!memories.length) {
     $("memory-start-research").onclick = async () => {
-      await page("research");
+      await page("deep");
       $("ticker").focus();
     };
   }
@@ -454,7 +464,7 @@ $("export").onclick = async () => {
   button.disabled = true;
   message.textContent = "Preparing download…";
   try {
-    const response = await apiResponse("/runs/" + encodeURIComponent(report.id) + "/export");
+    const response = await apiResponse("/runs/" + encodeURIComponent(report.id) + "/export?format=md");
     if (!response.ok) {
       const error = await response.json();
       throw Error(error.detail || "The report could not be exported.");
@@ -462,7 +472,7 @@ $("export").onclick = async () => {
     const url = URL.createObjectURL(await response.blob());
     const link = document.createElement("a");
     link.href = url;
-    link.download = `thesis-ledger-${report.request.ticker}-${report.request.as_of}.zip`;
+    link.download = `thesis-ledger-${report.request.ticker}-${report.request.as_of}.md`;
     document.body.append(link);
     link.click();
     link.remove();
@@ -477,7 +487,6 @@ $("export").onclick = async () => {
 api("/config")
   .then(async (c) => {
     liveReady = c.live_ready;
-    alpacaReady = c.alpaca_ready;
     if (c.public_mcp_path) {
       const url = new URL(c.public_mcp_path, location.origin).href;
       $("public-mcp-url").textContent = url;
@@ -486,8 +495,23 @@ api("/config")
       }, "Copy Cursor configuration");
       $("public-mcp").hidden = false;
     }
-    refreshMarket();
-    await selectTicker(selectedTicker, !c.public_visitor);
+    $("account-controls").hidden = !c.google_sign_in;
+    $("google-signin").hidden = c.signed_in;
+    $("signout-form").hidden = !c.signed_in;
+    $("ledger-access-note").textContent = c.signed_in
+      ? "Your reports and revisions are saved to your account."
+      : c.public_visitor ? "Guest reports are temporary. Sign in to keep future research in your private ledger." : "";
+    if (new URLSearchParams(location.search).get("signin") === "failed") {
+      $("signin-status").textContent = "Google sign-in did not finish. Please try again.";
+      $("signin-status").hidden = false;
+    }
+    if (location.hash === "#memory") {
+      history.replaceState(null, "", location.pathname);
+      await page("memory");
+    } else {
+      refreshMarket();
+    }
+    await selectTicker(selectedTicker);
   })
   .catch((e) => {
     status(e.message, true);
@@ -768,14 +792,13 @@ let selectionVersion = 0;
 let intradayTimer;
 let chartTicker = "";
 let liveReady = false;
-let alpacaReady = false;
 
 $("symbol-form").onsubmit = (event) => {
   event.preventDefault();
   selectTicker($("symbol-search").value);
 };
 
-async function selectTicker(value, autoResearch = false, savedReport = null) {
+async function selectTicker(value) {
   const ticker = value.trim().toUpperCase();
   if (!/^[A-Z][A-Z0-9.\-]{0,9}$/.test(ticker)) {
     $("intraday-status").textContent = "Enter a valid U.S. ticker.";
@@ -794,16 +817,11 @@ async function selectTicker(value, autoResearch = false, savedReport = null) {
   );
   run = null;
   $("results").hidden = true;
-  $("empty").hidden = true;
+  $("empty").hidden = false;
   $("export").disabled = true;
   refreshQuote("desk-quote", "ticker", "research");
   refreshIntraday(ticker);
   loadCompanyNews(ticker, version);
-  if (savedReport) {
-    run = savedReport;
-    render();
-    return;
-  }
   status("Looking for saved " + ticker + " research…");
   try {
     const path = "/dashboard?ticker=" + encodeURIComponent(ticker);
@@ -815,21 +833,6 @@ async function selectTicker(value, autoResearch = false, savedReport = null) {
       status("Saved live report · " + saved.request.as_of + " · " + saved.snapshot.warnings.join(" "));
     } else {
       status(liveReady ? "Select Run research to generate a report for " + ticker + "." : "Connect the research providers to run analysis.");
-    }
-    const current = saved?.request.as_of === localDate &&
-      (!alpacaReady || saved.snapshot.company_news_checked);
-    if (!autoResearch || !liveReady || current) return;
-    $("run-button").disabled = true;
-    status("Running the analyst team for " + ticker + "…");
-    try {
-      const fresh = await api(path, { method: "POST" });
-      if (version !== selectionVersion) return;
-      if (fresh.status !== "complete") throw Error(fresh.error || "Live research did not finish.");
-      run = fresh;
-      render();
-      status("Live report · " + fresh.request.as_of + " · " + fresh.snapshot.warnings.join(" "));
-    } finally {
-      $("run-button").disabled = false;
     }
   } catch (err) {
     if (version === selectionVersion) status(err.message, true);

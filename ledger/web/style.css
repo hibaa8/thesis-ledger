@@ -1096,3 +1096,13 @@ aside nav button.active kbd { color: #a0c4b7; }
 .report-export h2 { margin: 0 0 5px; }
 .report-export p { margin: 0; color: var(--muted); }
 .report-export #export-status:not(:empty) { margin-top: 6px; }
+
+#google-signin {
+  color: var(--green);
+  font-weight: 600;
+  text-underline-offset: 0.2em;
+}
+
+#signin-status {
+  margin: 1rem clamp(18px, 4vw, 38px) 0;
+}

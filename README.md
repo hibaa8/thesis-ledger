@@ -98,3 +98,29 @@ continue to resolve to the same workspace.
 With no database URL, the app uses SQLite. Existing SQLite research records
 stay in their original database. Chat transcripts, forecast cache, and daily
 usage counters continue to use the host's local storage.
+
+### Google sign-in
+
+The hosted site uses Supabase Auth with Google for browser accounts. Set up a
+Google OAuth web client and add the Supabase callback shown in the Google
+provider settings as an authorized redirect URI. Save the Google client ID
+and secret in **Supabase → Authentication → Sign In / Providers → Google**.
+For the existing project, the Google redirect URI is
+`https://xforbxaqhicjolgdgvxx.supabase.co/auth/v1/callback`.
+Follow the [Supabase Google setup guide](https://supabase.com/docs/guides/auth/social-sign-in/auth-google)
+to configure the Google consent screen and test users or publishing status.
+
+In **Supabase → Authentication → URL Configuration**, allow the app callback
+`https://thesis-ledger.onrender.com/auth/callback`. Set these environment
+variables in Render after enabling the Google provider:
+
+- `SUPABASE_URL=https://xforbxaqhicjolgdgvxx.supabase.co`
+- `SUPABASE_PUBLISHABLE_KEY` from the Supabase project API keys screen
+- `LEDGER_SITE_URL=https://thesis-ledger.onrender.com`
+
+Keep `LEDGER_DATABASE_URL` configured for durable storage. Signed-in runs
+are stored under the verified Supabase account ID. Google sign-in lasts up to
+one hour before the app asks the visitor to sign in again. Guest reports use
+a browser session and local storage on the server. Old guest runs are not
+attached to a Google account. Open a completed run from the ledger or
+Research History to view the full report and download its Markdown.
