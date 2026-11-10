@@ -408,7 +408,16 @@ async function loadMemory() {
             `<article class="panel memory-card"><div class="top"><strong>${esc(m.ticker)}</strong><span class="chip">${esc(m.mode)}</span><span class="tiny">${esc(m.as_of)}</span><button class="secondary" data-review="${esc(m.id)}">Review memory ↗</button></div><p>${esc(m.body.thesis)}</p><p><strong>Scope:</strong> ${esc(m.body.scope)}</p><p><strong>Invalidation:</strong> ${esc(m.body.invalidation)}</p>${cites(m.body.evidence_ids)}${m.revisions.map((r) => `<p class="revision">${esc(r.created.slice(0, 10))} · ${esc(r.scope)}<br>${esc(r.feedback)}</p>`).join("")}</article>`,
         )
         .join("")
-    : '<div class="empty">Your ledger is empty. Completed research runs create compact memories here.</div>';
+    : `<div class="empty">
+        <p>Complete a research run to save its thesis, evidence, and invalidation criteria here.</p>
+        <button id="memory-start-research" class="secondary" type="button">Open research desk ↗</button>
+      </div>`;
+  if (!memories.length) {
+    $("memory-start-research").onclick = async () => {
+      await page("research");
+      $("ticker").focus();
+    };
+  }
   document.querySelectorAll("[data-review]").forEach(
     (b) =>
       (b.onclick = () => {
