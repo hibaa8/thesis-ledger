@@ -687,31 +687,51 @@ $("forecast-form").onsubmit = async (e) => {
   }
 };
 
+function watchRow(q) {
+  const row = document.createElement("button");
+  row.type = "button";
+  row.className = "watch-row";
+  row.dataset.symbol = q.ticker;
+  row.setAttribute("aria-pressed", String(q.ticker === selectedTicker));
+  row.title = [q.source, q.as_of].filter(Boolean).join(" · ");
+  const symbol = document.createElement("strong");
+  symbol.textContent = q.ticker;
+  const price = document.createElement("span");
+  price.textContent = q.price == null ? "—" : "$" + fmt(q.price);
+  const change = document.createElement("span");
+  change.className = q.change_percent > 0 ? "market-up" : q.change_percent < 0 ? "market-down" : "";
+  change.textContent = q.change_percent == null ? "—" :
+    (q.change_percent > 0 ? "+" : "") + fmt(q.change_percent) + "%";
+  row.append(symbol, price, change);
+  row.onclick = () => selectTicker(q.ticker);
+  return row;
+}
+
 let marketTimer;
 async function refreshMarket() {
   clearTimeout(marketTimer);
   try {
     const brief = await api("/market");
     $("market-quotes").replaceChildren();
-    for (const q of brief.quotes) {
-      const row = document.createElement("button");
-      row.type = "button";
-      row.className = "watch-row";
-      row.dataset.symbol = q.ticker;
-      row.setAttribute("aria-pressed", String(q.ticker === selectedTicker));
-      row.title = q.source + " · " + q.as_of;
-      const symbol = document.createElement("strong");
-      symbol.textContent = q.ticker;
-      const price = document.createElement("span");
-      price.textContent = "$" + fmt(q.price);
-      const change = document.createElement("span");
-      change.className = q.change_percent > 0 ? "market-up" : q.change_percent < 0 ? "market-down" : "";
-      change.textContent = q.change_percent == null ? "—" :
-        (q.change_percent > 0 ? "+" : "") + fmt(q.change_percent) + "%";
-      row.append(symbol, price, change);
-      row.onclick = () => selectTicker(q.ticker);
-      $("market-quotes").append(row);
+    for (const quote of brief.quotes) $("market-quotes").append(watchRow(quote));
+    const activity = $("market-activity");
+    activity.replaceChildren();
+    for (const stock of brief.activity || []) {
+      const item = document.createElement("div");
+      item.append(watchRow(stock));
+      if (stock.headline?.url.startsWith("https://")) {
+        const link = document.createElement("a");
+        link.className = "activity-headline";
+        link.href = stock.headline.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = stock.headline.title;
+        link.title = stock.headline.source + " · " + new Date(stock.headline.published).toLocaleString();
+        item.append(link);
+      }
+      activity.append(item);
     }
+    $("activity-section").hidden = !activity.childElementCount;
     const measured = brief.quotes.filter(q => q.change_percent != null);
     const rising = measured.filter(q => q.change_percent > 0).length;
     const falling = measured.filter(q => q.change_percent < 0).length;

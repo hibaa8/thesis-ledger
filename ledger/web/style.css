@@ -1061,6 +1061,8 @@ dialog select {
 .watchlist .market-quotes { display: block; max-height: 396px; overflow-y: auto; }
 .watch-row { width: 100%; min-height: 44px; padding: 5px 14px; color: inherit; background: transparent; border: 0; border-top: 1px solid #2a373d; border-radius: 0; cursor: pointer; font: inherit; font-size: .81rem; font-variant-numeric: tabular-nums; }
 .watch-row:hover, .watch-row[aria-pressed="true"] { background: #243b3c; }
+#activity-section { border-top: 1px solid #354247; }
+.activity-headline { display: block; padding: 0 14px 10px; color: #a5e8d0; font-size: .75rem; overflow-wrap: anywhere; }
 .watchlist #market-warning { padding: 0 14px; }
 .news-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin: 26px 0; }
 .news-grid section { min-width: 0; }
