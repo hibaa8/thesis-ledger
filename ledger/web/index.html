@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Thesis Ledger — Research with a memory</title>
+    <link rel="stylesheet" href="/static/style.css" />
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <aside>
+      <a class="brand" href="/"
+        ><span class="mark">▥</span
+        ><span
+          >thesis<span class="muted">ledger</span
+          ><small>RESEARCH WORKSPACE</small></span
+        ></a
+      >
+      <div class="nav-caption">WORKSPACE</div>
+      <nav aria-label="Main navigation">
+        <button data-page="research" class="active">
+          ◈ <span>Research desk</span><kbd>01</kbd></button
+        ><button data-page="memory">
+          ▤ <span>Thesis ledger</span><kbd>02</kbd></button
+        ><button data-page="runs">
+          ◷ <span>Research history</span><kbd>03</kbd>
+        </button>
+      </nav>
+      <div class="nav-caption">SYSTEM</div>
+      <nav>
+        <button data-page="connect">
+          ⌘ <span>Connect via MCP</span><span class="dot"></span></button
+        ><button data-page="method">↳ <span>How it works</span></button>
+      </nav>
+      <div class="sidebar-bottom">
+        <span class="dot"></span> Local workspace
+        <small
+          >Evidence before conviction.<br />Research before execution.</small
+        >
+        <div class="avatar">HA</div>
+        Independent research <span class="version">v0.1</span>
+      </div>
+    </aside>
+    <div class="workspace">
+      <header>
+        <div>
+          <span class="muted">Workspace</span><span class="slash">/</span
+          ><span id="breadcrumb">Research desk</span>
+        </div>
+        <div class="header-right">
+          <span class="chip">● &nbsp; LOCAL</span
+          ><button id="auth-button" class="quiet">Access token</button>
+        </div>
+      </header>
+      <main id="research" class="page active">
+        <div class="eyebrow">YOUR MULTI-AGENT RESEARCH DESK</div>
+        <div class="title-row">
+          <div>
+            <h1>A thesis. Every side of it.</h1>
+            <p class="subtitle">
+              Independent perspectives, forecast scenarios, and a memory that
+              evolves.
+            </p>
+          </div>
+          <button id="export" class="secondary" disabled>
+            ↓ &nbsp; Export research
+          </button>
+        </div>
+        <form id="research-form" class="research-form">
+          <div class="form-top">
+            <label
+              >ASSET<input
+                id="ticker"
+                value="NVDA"
+                maxlength="10"
+                required
+                pattern="[A-Za-z][A-Za-z0-9.\-]{0,9}"
+                aria-label="Ticker symbol" /></label
+            ><label>AS OF<input type="date" id="asof" required /></label
+            ><label
+              >HORIZON<select id="horizon">
+                <option value="5">5 sessions</option>
+                <option value="10">10 sessions</option>
+                <option value="20">20 sessions</option>
+              </select></label
+            ><label
+              >DATA<select id="mode">
+                <option value="demo">Demo fixture</option>
+                <option value="live">Live providers</option>
+              </select></label
+            ><label
+              >FORECAST<select id="engine">
+                <option value="bootstrap">Bootstrap baseline</option>
+                <option value="kronos">Kronos-small</option>
+              </select></label
+            ><button type="submit" id="run-button" class="primary">
+              Run research &nbsp; ↗
+            </button>
+          </div>
+          <div class="form-bottom">
+            <span>↳</span
+            ><input
+              id="question"
+              aria-label="Research question"
+              placeholder="What supports or challenges the investment thesis?"
+              maxlength="1200"
+            /><label class="memory-toggle"
+              ><input id="use-memory" type="checkbox" checked /> Use thesis
+              memory</label
+            >
+          </div>
+        </form>
+        <div id="status" role="status" aria-live="polite" class="status">
+          Demo mode uses synthetic data and scripted analyst reports. No API
+          keys needed.
+        </div>
+        <div id="empty" class="empty">
+          <div class="orb">◈</div>
+          <h2>Make the case. Then challenge it.</h2>
+          <p>
+            Start a research run to follow the evidence from<br />specialist
+            analysts through debate and risk review.
+          </p>
+          <div class="flow">
+            <span>01 &nbsp; Observe</span><i>→</i><span>02 &nbsp; Debate</span
+            ><i>→</i><span>03 &nbsp; Remember</span>
+          </div>
+          <button class="secondary" id="sample">Explore an NVDA demo ↗</button>
+        </div>
+        <div id="results" hidden>
+          <div class="asset-row">
+            <div>
+              <span class="asset-icon">↗</span><strong id="asset-name"></strong
+              ><span id="data-badge" class="chip amber"></span>
+            </div>
+            <span class="muted" id="run-date"></span>
+          </div>
+          <div class="stats" id="stats"></div>
+          <div class="analysis-grid">
+            <section class="panel chart-panel">
+              <div class="panel-heading">
+                <div>
+                  <h2>Price & scenario map</h2>
+                  <p id="forecast-label"></p>
+                </div>
+                <div class="segmented">
+                  <button data-range="40" class="active">40D</button
+                  ><button data-range="100">100D</button>
+                </div>
+              </div>
+              <div id="chart" class="chart"></div>
+              <div class="chart-key">
+                <span><i class="line green"></i> Observed close</span
+                ><span><i class="line purple"></i> Scenario median</span
+                ><span><i class="range"></i> 10–90% sample range</span>
+              </div>
+              <p class="chart-note" id="forecast-note"></p>
+            </section>
+            <section class="panel thesis">
+              <div class="panel-heading">
+                <h2>Research conclusion</h2>
+                <span class="tiny">RISK REVIEWED</span>
+              </div>
+              <div id="decision"></div>
+            </section>
+          </div>
+          <div class="section-heading">
+            <h2>
+              The research team
+              <span class="muted">/ independent perspectives</span>
+            </h2>
+            <span class="tiny" id="call-count"></span>
+          </div>
+          <div id="analysts" class="analysts"></div>
+          <div class="tabs" role="tablist">
+            <button data-tab="debate" class="active" role="tab">
+              Bull / bear debate</button
+            ><button data-tab="evidence" role="tab">Evidence room</button
+            ><button data-tab="trace" role="tab">Harness trace</button
+            ><button data-tab="evaluation" role="tab">Forecast checks</button>
+          </div>
+          <section id="detail" class="panel detail"></section>
+        </div>
+      </main>
+      <main id="memory" class="page">
+        <div class="eyebrow">MEMORY THAT CAN CHANGE ITS MIND</div>
+        <h1>The thesis ledger.</h1>
+        <p class="subtitle">
+          Compact research memories. Original evidence preserved. Revisions made
+          explicit.
+        </p>
+        <div class="info">
+          Memories are hypotheses, not verified facts. Review narrows their
+          scope or retires them; it does not establish trading performance.
+        </div>
+        <div id="memory-list"></div>
+      </main>
+      <main id="runs" class="page">
+        <div class="eyebrow">REPRODUCIBLE BY DESIGN</div>
+        <h1>Research history.</h1>
+        <p class="subtitle">
+          Reopen the evidence, decisions, and execution trace behind each run.
+        </p>
+        <div id="run-list"></div>
+      </main>
+      <main id="connect" class="page">
+        <div class="eyebrow">ONE WORKFLOW. YOUR FAVORITE CLIENT.</div>
+        <h1>Research, wherever you work.</h1>
+        <p class="subtitle">
+          Connect Claude Desktop or Cursor to the same research and memory
+          tools.
+        </p>
+        <div class="two-col">
+          <section class="panel prose">
+            <span class="chip">LOCAL · STDIO</span>
+            <h2>Claude Desktop & Cursor</h2>
+            <p>
+              Install the project, then merge this configuration into your
+              client's MCP settings. Replace the checkout path if needed.
+            </p>
+            <pre id="mcp-config"></pre>
+            <button class="secondary" id="copy-config">
+              Copy configuration
+            </button>
+          </section>
+          <section class="panel prose">
+            <span class="chip">STREAMABLE HTTP</span>
+            <h2>A single endpoint</h2>
+            <code id="mcp-url"></code>
+            <p>
+              While this app is running, clients with HTTP MCP support can
+              connect here. A local address only works on this machine.
+            </p>
+            <p>
+              For a shareable link, deploy the Python service behind HTTPS and
+              set an access token. See <strong>docs/deployment.md</strong> for
+              authentication, persistent storage, and client setup.
+            </p>
+            <div class="info">No public endpoint has been deployed.</div>
+          </section>
+        </div>
+        <section class="panel prose">
+          <h2>Five tools. One evidence trail.</h2>
+          <div class="tools-grid">
+            <div>
+              <code>research_ticker</code>
+              <p>Run analysts, debate, forecasting, and risk review.</p>
+            </div>
+            <div>
+              <code>get_research</code>
+              <p>Inspect a saved report and source snapshot.</p>
+            </div>
+            <div>
+              <code>search_theses</code>
+              <p>Retrieve compact memories by asset and date.</p>
+            </div>
+            <div>
+              <code>review_thesis</code>
+              <p>Narrow or retire a memory with feedback.</p>
+            </div>
+            <div>
+              <code>resume_research</code>
+              <p>Continue from completed checkpoints.</p>
+            </div>
+          </div>
+        </section>
+      </main>
+      <main id="method" class="page">
+        <div class="eyebrow">A SMALL, EXPLAINABLE HARNESS</div>
+        <h1>Built to show its work.</h1>
+        <p class="subtitle">
+          Inspired by TradingAgents, Kronos, SimpleMem, and ReHarness.
+        </p>
+        <div class="method-flow">
+          <span>Source snapshot</span> → <span>4 analysts</span> →
+          <span>Bull / bear</span> → <span>Manager + risk</span> →
+          <span>Thesis memory</span>
+        </div>
+        <div class="two-col">
+          <section class="panel prose">
+            <h2>Disagreement is useful data.</h2>
+            <p>
+              Analysts form their views before seeing the quantitative forecast.
+              The manager then compares the debate with forecast scenarios. A
+              risk reviewer can force abstention; the interface preserves
+              dissent rather than averaging it into artificial confidence.
+            </p>
+            <h2>Bounded work, explicit state.</h2>
+            <p>
+              One or two debate rounds. At most 16 model attempts across
+              resumes. A four-minute orchestration deadline. Validated report
+              schemas and citation IDs. Completed stages are persisted in
+              SQLite.
+            </p>
+          </section>
+          <section class="panel prose">
+            <h2>Remember less. Preserve provenance.</h2>
+            <p>
+              Store the thesis, invalidation condition, regime, date, and source
+              IDs—not full conversations in every prompt. Retrieve by asset,
+              mode, date, and lexical relevance. Demo memory never enters live
+              research.
+            </p>
+            <h2>Revise without rewriting history.</h2>
+            <p>
+              Feedback can narrow a memory to its original snapshot or retire
+              it. The source claim remains immutable. This is a conservative
+              adaptation of recurrent memory, not a reproduction of ReHarness or
+              SimpleMem's full algorithms.
+            </p>
+          </section>
+        </div>
+        <section class="panel prose">
+          <h2>What this version does—and what remains to test</h2>
+          <p>
+            Demo reports are deterministic fixtures. Live mode uses your
+            configured model and Alpha Vantage credentials. Real Kronos
+            inference requires its upstream package and model weights. Bootstrap
+            scenarios are clearly labeled and evaluated against a no-change
+            baseline. Neither forecast establishes profitability.
+          </p>
+          <p>
+            This is an orchestrated multi-agent workflow, not an autonomous
+            trading agent. There is no broker integration, no trained
+            reinforcement learning policy, and no claim to reproduce the papers'
+            benchmark results. Semantic retrieval, automatic outcome settlement,
+            and multi-user authentication are future extensions.
+          </p>
+        </section>
+      </main>
+      <footer>
+        THESIS LEDGER
+        <span
+          >Research software · No trade execution · Forecasts are
+          uncertain</span
+        >
+      </footer>
+    </div>
+    <dialog id="review-dialog">
+      <form id="review-form">
+        <h2>Review this memory</h2>
+        <p>
+          Narrow its applicability or retire it. Original evidence stays intact.
+        </p>
+        <input type="hidden" id="review-id" /><label
+          >Feedback<textarea
+            id="feedback"
+            required
+            minlength="10"
+            maxlength="1500"
+            rows="4"
+          ></textarea></label
+        ><label
+          >Revision<select id="scope">
+            <option value="source_snapshot_only">
+              Restrict to original source snapshot
+            </option>
+            <option value="retire">Retire from future retrieval</option>
+          </select></label
+        >
+        <div class="dialog-actions">
+          <button type="button" id="close-review" class="secondary">
+            Cancel</button
+          ><button class="primary">Save revision</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>
