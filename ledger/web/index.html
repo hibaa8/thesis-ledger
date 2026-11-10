@@ -406,6 +406,18 @@
         >
       </footer>
     </div>
+    <dialog id="auth-dialog">
+      <form id="auth-form">
+        <h2>Unlock Thesis Ledger</h2>
+        <p>Use the access token from this service’s Environment settings.</p>
+        <label for="access-token-input">Access token</label>
+        <input id="access-token-input" type="password" required autocomplete="off" />
+        <div class="dialog-actions">
+          <button type="button" id="close-auth" class="secondary">Cancel</button>
+          <button class="primary">Unlock</button>
+        </div>
+      </form>
+    </dialog>
     <dialog id="review-dialog">
       <form id="review-form">
         <h2>Review this memory</h2>

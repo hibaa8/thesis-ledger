@@ -65,15 +65,16 @@ $("copy-config").onclick = async () => {
   }
 };
 $("auth-button").onclick = () => {
-  const v = prompt(
-    "Access token for this server (stored for this tab only)",
-    token,
-  );
-  if (v !== null) {
-    token = v;
-    sessionStorage.setItem("ledger-token", v);
-    location.reload();
-  }
+  $("access-token-input").value = "";
+  $("auth-dialog").showModal();
+};
+$("close-auth").onclick = () => $("auth-dialog").close();
+$("auth-form").onsubmit = (event) => {
+  event.preventDefault();
+  const value = $("access-token-input").value.trim();
+  if (!value) return;
+  sessionStorage.setItem("ledger-token", value);
+  location.reload();
 };
 async function page(name) {
   document
@@ -457,7 +458,10 @@ api("/config")
     refreshMarket();
     await selectTicker(selectedTicker, true);
   })
-  .catch((e) => status(e.message, true));
+  .catch((e) => {
+    status(e.message, true);
+    if (e.message === "Valid bearer token required") $("auth-button").click();
+  });
 
 let chatSession = localStorage.getItem("ledger-chat-session") || newChatId();
 let quoteTimer;
@@ -726,7 +730,7 @@ async function selectTicker(value, autoResearch = false, savedReport = null) {
       render();
       status("Saved live report · " + saved.request.as_of + " · " + saved.snapshot.warnings.join(" "));
     } else {
-      status(liveReady ? "Select Run research to generate a " + ticker + " report." : "Connect the research providers to run analysis.");
+      status(liveReady ? "Select Run research to generate a report for " + ticker + "." : "Connect the research providers to run analysis.");
     }
     const current = saved?.request.as_of === localDate &&
       (!alpacaReady || saved.snapshot.company_news_checked);
