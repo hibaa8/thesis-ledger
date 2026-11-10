@@ -98,10 +98,11 @@ def test_no_silent_kronos_fallback(monkeypatch):
 
 
 def test_live_requires_credentials(tmp_path, monkeypatch):
-    monkeypatch.delenv("ALPHAVANTAGE_API_KEY", raising=False)
+    for key in ("ALPHAVANTAGE_API_KEY", "APCA_API_KEY_ID", "APCA_API_SECRET_KEY"):
+        monkeypatch.delenv(key, raising=False)
     r = asyncio.run(Harness(Store(tmp_path)).run(ResearchRequest(mode="live")))
     assert r["status"] == "failed"
-    assert "ALPHAVANTAGE_API_KEY" in r["error"]
+    assert "Neither Alpha Vantage nor Alpaca" in r["error"]
     assert "decision" not in r
 
 

@@ -101,7 +101,7 @@ def create_app(directory=None):
             live_ready=bool(
                 os.getenv("LLM_API_KEY")
                 and os.getenv("LLM_MODEL")
-                and os.getenv("ALPHAVANTAGE_API_KEY")
+                and (os.getenv("ALPHAVANTAGE_API_KEY") or alpaca_ready())
             ),
             chat_ready=bool(os.getenv("LLM_API_KEY")),
             quote_refresh_seconds=quote_interval(),
@@ -143,7 +143,7 @@ def create_app(directory=None):
             raise HTTPException(409, "Research is already running.")
         if not config()["live_ready"]:
             raise HTTPException(
-                503, "Configure OpenAI and Alpha Vantage to load live research."
+                503, "Configure OpenAI and either Alpha Vantage or Alpaca to load live research."
             )
         return await harness.run(req)
 

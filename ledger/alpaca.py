@@ -1,5 +1,6 @@
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -10,6 +11,41 @@ def alpaca_headers():
     if not key or not secret:
         raise ValueError("Configure Alpaca market data credentials first.")
     return {"APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": secret}
+
+
+async def daily_bars(ticker, cutoff):
+    market_tz = ZoneInfo("America/New_York")
+    feed = os.getenv("LEDGER_ALPACA_FEED", "iex")
+    if feed not in {"iex", "sip"}:
+        raise ValueError("Unsupported Alpaca feed.")
+    async with httpx.AsyncClient(timeout=10, headers=alpaca_headers()) as client:
+        response = await client.get(
+            "https://data.alpaca.markets/v2/stocks/bars",
+            params={
+                "symbols": ticker,
+                "timeframe": "1Day",
+                "feed": feed,
+                "start": (cutoff - timedelta(days=160)).isoformat(),
+                "end": datetime.combine(
+                    cutoff, datetime.max.time(), market_tz
+                ).isoformat(),
+                "limit": 1000,
+                "adjustment": "raw",
+            },
+        )
+        response.raise_for_status()
+        rows = (response.json().get("bars") or {}).get(ticker) or []
+    return [
+        dict(
+            date=datetime.fromisoformat(row["t"]).astimezone(market_tz).date().isoformat(),
+            open=float(row["o"]),
+            high=float(row["h"]),
+            low=float(row["l"]),
+            close=float(row["c"]),
+            volume=float(row["v"]),
+        )
+        for row in rows
+    ], f"Alpaca {feed.upper()}"
 
 
 async def intraday(ticker):

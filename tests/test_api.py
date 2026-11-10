@@ -1,5 +1,9 @@
+from datetime import date, timedelta
+
+import httpx
 from fastapi.testclient import TestClient
 from ledger.api import create_app
+from ledger.data import demo_snapshot
 
 
 def test_ui_api_and_mcp(tmp_path):
@@ -72,3 +76,57 @@ def test_auth_and_origin(tmp_path, monkeypatch):
         assert (
             client.get("/health", headers={"Host": "evil.example"}).status_code == 400
         )
+
+
+def test_forecast_uses_alpaca_daily_bars_when_alpha_vantage_is_throttled(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("ALPHAVANTAGE_API_KEY", "test-alpha-key")
+    monkeypatch.setenv("APCA_API_KEY_ID", "test-alpaca-key")
+    monkeypatch.setenv("APCA_API_SECRET_KEY", "test-alpaca-secret")
+    monkeypatch.setenv("LEDGER_ALPACA_FEED", "iex")
+    as_of = date.today() - timedelta(days=2)
+    bars = demo_snapshot("NVDA", as_of)["bars"]
+
+    def upstream(request):
+        if request.url.host == "www.alphavantage.co":
+            return httpx.Response(200, json={"Note": "Quota exceeded"})
+        assert request.url.host == "data.alpaca.markets"
+        assert request.url.params["symbols"] == "NVDA"
+        assert request.url.params["timeframe"] == "1Day"
+        assert request.url.params["feed"] == "iex"
+        return httpx.Response(
+            200,
+            json={
+                "bars": {
+                    "NVDA": [
+                        dict(
+                            t=bar["date"] + "T05:00:00Z",
+                            o=bar["open"],
+                            h=bar["high"],
+                            l=bar["low"],
+                            c=bar["close"],
+                            v=bar["volume"],
+                        )
+                        for bar in bars[-60:]
+                    ]
+                }
+            },
+        )
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda **opts: real_client(transport=httpx.MockTransport(upstream), **opts),
+    )
+    with TestClient(create_app(tmp_path)) as client:
+        response = client.post(
+            "/api/forecast",
+            json={"ticker": "NVDA", "mode": "live", "as_of": as_of.isoformat()},
+        )
+        assert response.status_code == 200, response.text
+        result = response.json()
+        assert result["snapshot"]["provider"] == "Alpaca IEX"
+        assert result["snapshot"]["bars"][-1]["date"] == bars[-1]["date"]
+        assert len(result["forecast"]["points"]) == 5

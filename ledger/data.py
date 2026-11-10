@@ -1,13 +1,13 @@
 import hashlib
 import math
-import os
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 import httpx
 import numpy as np
 import pandas as pd
 import exchange_calendars as xcals
 
-from .alpaca import company_news
+from .alpaca import company_news, daily_bars
 from .market import alpha_query, news_sources
 
 CAL = xcals.get_calendar("XNYS")
@@ -105,40 +105,47 @@ def demo_snapshot(ticker, as_of):
 async def snapshot(req, *, include_research_sources=True):
     if req.mode == "demo":
         return demo_snapshot(req.ticker, req.as_of)
-    key = os.getenv("ALPHAVANTAGE_API_KEY")
-    if not key:
-        raise ValueError(
-            "Live data requires ALPHAVANTAGE_API_KEY. Select Demo to explore without credentials."
-        )
+    market_today = datetime.now(ZoneInfo("America/New_York")).date()
+    cutoff = min(req.as_of, market_today - timedelta(days=1))
     async with httpx.AsyncClient(timeout=30) as client:
 
         async def get(function, **params):
             return await alpha_query(client, function, **params)
 
-        prices = await get("TIME_SERIES_DAILY", symbol=req.ticker, outputsize="compact")
-        rows = prices.get("Time Series (Daily)", {})
-        if not rows:
-            raise ValueError("Provider returned no daily bars")
-        bars = [
-            dict(
-                date=d,
-                open=float(v["1. open"]),
-                high=float(v["2. high"]),
-                low=float(v["3. low"]),
-                close=float(v["4. close"]),
-                volume=float(v["5. volume"]),
+        try:
+            prices = await get("TIME_SERIES_DAILY", symbol=req.ticker, outputsize="compact")
+            bars = validate_bars(
+                [
+                    dict(
+                        date=d,
+                        open=float(v["1. open"]),
+                        high=float(v["2. high"]),
+                        low=float(v["3. low"]),
+                        close=float(v["4. close"]),
+                        volume=float(v["5. volume"]),
+                    )
+                    for d, v in prices.get("Time Series (Daily)", {}).items()
+                ],
+                cutoff,
             )
-            for d, v in rows.items()
-        ]
-        # Never use today's potentially unfinished daily candle.
-        cutoff = min(req.as_of, date.today() - timedelta(days=1))
-        bars = validate_bars(bars, cutoff)
+            provider = "Alpha Vantage"
+            price_url = "https://www.alphavantage.co/documentation/#daily"
+        except (ValueError, httpx.HTTPError, KeyError, TypeError):
+            try:
+                bars, provider = await daily_bars(req.ticker, cutoff)
+                bars = validate_bars(bars, cutoff)
+            except (ValueError, httpx.HTTPError, KeyError, TypeError):
+                raise ValueError(
+                    "Neither Alpha Vantage nor Alpaca returned enough valid daily bars. "
+                    "Check the ticker, date, and market data credentials."
+                ) from None
+            price_url = "https://docs.alpaca.markets/us/reference/stockbars"
         evidence = [
             dict(
                 id="prices",
                 kind="market",
-                title=f"{req.ticker} daily unadjusted OHLCV",
-                url="https://www.alphavantage.co/documentation/#daily",
+                title=f"{req.ticker} daily unadjusted OHLCV · {provider}",
+                url=price_url,
                 published=bars[-1]["date"],
                 text=f"{len(bars)} daily bars through {bars[-1]['date']}. Unadjusted: splits can distort signals.",
             )
@@ -260,7 +267,7 @@ async def snapshot(req, *, include_research_sources=True):
     return dict(
         bars=bars,
         evidence=evidence,
-        provider="Alpha Vantage",
+        provider=provider,
         company_news_checked=company_news_checked,
         retrieved_at=datetime.now(timezone.utc).isoformat(),
         warnings=warnings,
