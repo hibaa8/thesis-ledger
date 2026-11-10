@@ -3,7 +3,11 @@ import os
 import uvicorn
 
 
+from .config import load_config
+
+
 def main():
+    load_config()
     parser = argparse.ArgumentParser(
         description="Thesis Ledger local research workspace"
     )
