@@ -1,4 +1,6 @@
+import asyncio
 import json
+from types import SimpleNamespace
 
 import httpx
 from fastapi.testclient import TestClient
@@ -73,3 +75,32 @@ def test_chat_streams_tool_grounded_answer_and_saves_history(tmp_path, monkeypat
             == "NVDA closed at $123.45."
         )
         assert client.get("/api/chat/" + "b" * 32).json() == []
+
+
+
+def test_stock_snapshot_keeps_company_evidence_when_prices_are_unavailable(monkeypatch):
+    from ledger.chat import Chat
+
+    async def company_snapshot(request, *, require_bars):
+        assert request.ticker == "GOOGL"
+        assert require_bars is False
+        return {
+            "bars": [],
+            "warnings": ["Daily price history was unavailable."],
+            "evidence": [
+                {"id": "fundamentals", "kind": "fundamentals", "url": "https://www.sec.gov/filing"},
+                {"id": "company-news-1", "kind": "news", "published": "2026-11-10"},
+                {"id": "market-news-2", "kind": "news", "published": "2026-11-10"},
+            ],
+        }
+
+    async def unavailable_quote(ticker):
+        raise ValueError("Quote unavailable")
+
+    monkeypatch.setattr("ledger.chat.snapshot", company_snapshot)
+    chat = Chat(None, None, SimpleNamespace(get=unavailable_quote), None)
+    result = asyncio.run(chat.execute("stock_snapshot", {"ticker": "googl"}))
+    assert result["quote"] is None
+    assert "daily_technicals" not in result
+    assert [item["id"] for item in result["evidence"]] == ["fundamentals", "company-news-1"]
+    assert "Latest quote unavailable." in result["warnings"]

@@ -103,7 +103,7 @@ def demo_snapshot(ticker, as_of):
     )
 
 
-async def snapshot(req, *, include_research_sources=True):
+async def snapshot(req, *, include_research_sources=True, require_bars=True):
     if req.mode == "demo":
         return demo_snapshot(req.ticker, req.as_of)
     market_today = datetime.now(ZoneInfo("America/New_York")).date()
@@ -136,24 +136,27 @@ async def snapshot(req, *, include_research_sources=True):
                 bars, provider = await daily_bars(req.ticker, cutoff)
                 bars = validate_bars(bars, cutoff)
             except (ValueError, httpx.HTTPError, KeyError, TypeError):
-                raise ValueError(
-                    "Neither Alpha Vantage nor Alpaca returned enough valid daily bars. "
-                    "Check the ticker, date, and market data credentials."
-                ) from None
+                if require_bars:
+                    raise ValueError(
+                        "Neither Alpha Vantage nor Alpaca returned enough valid daily bars. "
+                        "Check the ticker, date, and market data credentials."
+                    ) from None
+                bars, provider = [], None
             price_url = "https://docs.alpaca.markets/us/reference/stockbars"
-        evidence = [
-            dict(
+        evidence = []
+        if bars:
+            evidence.append(dict(
                 id="prices",
                 kind="market",
                 title=f"{req.ticker} daily unadjusted OHLCV · {provider}",
                 url=price_url,
                 published=bars[-1]["date"],
                 text=f"{len(bars)} daily bars through {bars[-1]['date']}. Unadjusted: splits can distort signals.",
-            )
-        ]
+            ))
         company_news_checked = False
         warnings = [
-            "Daily bars are unadjusted. Corporate actions can distort forecasts.",
+            "Daily bars are unadjusted. Corporate actions can distort forecasts."
+            if bars else "Daily price history was unavailable.",
             "Social sentiment is unavailable; news is not a proxy for social sentiment.",
         ]
         if include_research_sources and req.as_of == date.today():
@@ -269,7 +272,7 @@ async def snapshot(req, *, include_research_sources=True):
             except (ValueError, httpx.HTTPError, KeyError, TypeError):
                 warnings.append("No SEC fundamentals were available by the analysis date.")
             warnings.append("Historical runs exclude current news to avoid look-ahead leakage.")
-    if (req.as_of - date.fromisoformat(bars[-1]["date"])).days > 5:
+    if bars and (req.as_of - date.fromisoformat(bars[-1]["date"])).days > 5:
         warnings.append(
             "STALE: latest market bar is more than five calendar days before the analysis date."
         )
