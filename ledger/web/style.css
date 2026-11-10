@@ -729,20 +729,60 @@ code {
 .tools-grid p {
   font-size: 12px;
 }
+.method-diagram {
+  margin-top: 28px;
+}
 .method-flow {
-  display: flex;
-  gap: 18px;
-  align-items: center;
-  flex-wrap: wrap;
-  margin: 35px 0;
-  color: var(--muted);
-  font-size: 11px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 24px;
+  list-style: none;
+  margin: 20px 0;
+  padding: 0;
+}
+.method-flow li {
+  position: relative;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.method-flow li:not(:last-child)::after {
+  content: "→";
+  position: absolute;
+  left: calc(100% + 5px);
+  top: 45%;
+  color: var(--green);
 }
 .method-flow span {
-  padding: 15px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
+  display: block;
+  margin-bottom: 8px;
+  font: .72rem monospace;
   color: var(--green);
+}
+.method-flow strong {
+  display: block;
+  line-height: 1.35;
+}
+.method-flow p {
+  margin: 7px 0 0;
+}
+.method-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.method-inputs p {
+  margin: 0;
+  padding: 12px 14px;
+  border-left: 2px solid var(--green);
+}
+@media (max-width: 1050px) {
+  .method-flow, .method-inputs { grid-template-columns: 1fr; }
+  .method-flow li:not(:last-child)::after {
+    content: "↓";
+    left: 16px;
+    top: calc(100% + 2px);
+  }
 }
 .history-row {
   display: flex;

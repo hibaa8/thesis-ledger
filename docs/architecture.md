@@ -3,8 +3,8 @@
 ```mermaid
 flowchart TD
     UI["Browser · research dashboard and chat"] --> Chat["OpenAI · streaming chat and tool calls"]
-    UI --> K["Forecast tab · standalone Kronos-small"]
-    K -->|Completed daily bars only| AV["Alpha Vantage"]
+    UI --> K["Forecast tab · bootstrap or Kronos-small"]
+    K -->|Completed daily bars only| AV["Alpha Vantage or Alpaca"]
     UI --> H["Research harness"]
     MCP["Claude / Cursor · MCP"] --> H
     UI --> Q["Price service · cached quotes"]
@@ -12,7 +12,8 @@ flowchart TD
     Chat --> Q
     Chat --> H
     Q --> Feed["Alpaca latest trades or Alpha Vantage quotes"]
-    H --> S["Dated evidence snapshot · Alpha Vantage"]
+    H --> S["Dated evidence snapshot"]
+    S -->|Company fundamentals| SEC["Alpha Vantage or SEC EDGAR"]
     S --> A["Parallel specialist analysts"]
     S --> F["Bootstrap scenarios or optional Kronos-small"]
     A --> D["Bull and bear debate"]
