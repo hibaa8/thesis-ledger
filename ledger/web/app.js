@@ -136,7 +136,7 @@ $("research-form").onsubmit = async (e) => {
       as_of: $("asof").value,
       horizon: +$("horizon").value,
       mode: "live",
-      forecast: $("engine").value,
+      forecast: "bootstrap",
       use_memory: $("use-memory").checked,
     };
     if ($("question").value.trim())
@@ -342,7 +342,7 @@ function details() {
       .join("");
   } else {
     const e = run.evaluation;
-    html = `<h2>Rolling-origin forecast diagnostic</h2><p>${esc(e.note)} The diagnostic evaluates the bootstrap baseline, even when the displayed scenario uses Kronos.</p><div class="stats">${[
+    html = `<h2>Rolling-origin forecast diagnostic</h2><p>${esc(e.note)} The diagnostic evaluates historical-return scenarios.</p><div class="stats">${[
       ["TEST WINDOWS", e.windows],
       ["BOOTSTRAP MAPE", fmt(e.bootstrap_mape) + "%"],
       ["NO-CHANGE MAPE", fmt(e.naive_mape) + "%"],
@@ -473,15 +473,8 @@ api("/config")
   .then(async (c) => {
     liveReady = c.live_ready;
     alpacaReady = c.alpaca_ready;
-    if (!c.kronos_configured)
-      $("engine").options[1].textContent = "Kronos (setup required)";
-    if (c.kronos_configured) {
-      const kronosOption = $("forecast-engine").options[1];
-      kronosOption.disabled = false;
-      kronosOption.textContent = "Kronos-small";
-    }
     refreshMarket();
-    await selectTicker(selectedTicker, true);
+    await selectTicker(selectedTicker, !c.public_visitor);
   })
   .catch((e) => {
     status(e.message, true);
@@ -663,7 +656,7 @@ $("forecast-form").onsubmit = async (e) => {
         ticker: $("forecast-ticker").value.trim().toUpperCase(),
         horizon: Number($("forecast-horizon").value),
         mode: "live",
-        forecast: $("forecast-engine").value,
+        forecast: "bootstrap",
       }),
     });
     chart(result, "forecast-chart", 40);

@@ -21,8 +21,14 @@
       >
       <div class="nav-caption">WORKSPACE</div>
       <nav aria-label="Main navigation">
-        <button data-page="chat">Research chat</button>
-        <button data-page="forecast">Forecast</button>
+        <button data-page="chat">
+          <svg class="nav-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3.5h12v8H7l-3 2v-2H2z"/><path d="M5 6.5h6M5 9h4"/></svg>
+          <span>Research chat</span>
+        </button>
+        <button data-page="forecast">
+          <svg class="nav-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2v12h12M4 11l3-4 3 2 4-5"/><path d="M11 4h3v3"/></svg>
+          <span>Forecast</span>
+        </button>
         <button data-page="research" class="active">
           ◈ <span>Research desk</span><kbd>01</kbd></button
         ><button data-page="memory">
@@ -63,11 +69,6 @@
             <input id="forecast-ticker" value="NVDA" maxlength="10" required />
             <label for="forecast-horizon">Sessions</label>
             <input id="forecast-horizon" type="number" min="1" max="20" value="5" required />
-            <label for="forecast-engine">Model</label>
-            <select id="forecast-engine">
-              <option value="bootstrap">Historical returns</option>
-              <option value="kronos" disabled>Kronos-small (setup required)</option>
-            </select>
             <button id="forecast-submit" type="submit">Run forecast</button>
           </form>
           <p id="forecast-status" role="status"></p>
@@ -145,11 +146,6 @@
                 <option value="5">5 sessions</option>
                 <option value="10">10 sessions</option>
                 <option value="20">20 sessions</option>
-              </select></label
-            ><label
-              >FORECAST<select id="engine">
-                <option value="bootstrap">Bootstrap baseline</option>
-                <option value="kronos">Kronos-small</option>
               </select></label
             ><button type="submit" id="run-button" class="primary">
               Run research &nbsp; ↗
