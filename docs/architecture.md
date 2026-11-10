@@ -1,16 +1,41 @@
 # Architecture and decisions
 
+```mermaid
+flowchart TD
+    UI["Browser · research dashboard and chat"] --> Chat["OpenAI · streaming chat and tool calls"]
+    UI --> K["Forecast tab · standalone Kronos-small"]
+    K -->|Completed daily bars only| AV["Alpha Vantage"]
+    UI --> H["Research harness"]
+    MCP["Claude / Cursor · MCP"] --> H
+    UI --> Q["Price service · cached quotes"]
+    MCP --> Q
+    Chat --> Q
+    Chat --> H
+    Q --> Feed["Alpaca latest trades or Alpha Vantage quotes"]
+    H --> S["Dated evidence snapshot · Alpha Vantage"]
+    S --> A["Parallel specialist analysts"]
+    S --> F["Bootstrap scenarios or optional Kronos-small"]
+    A --> D["Bull and bear debate"]
+    D --> M["Research manager"]
+    F --> M
+    M --> R["Risk review and report"]
+    R --> DB["SQLite · reports, theses, revisions, chat history"]
+    Chat --> DB
+    DB -->|Date-filtered thesis retrieval| H
+    UI -->|Review a thesis| DB
+```
+
 ## Product boundary
 
-A local, single-user research workbench. The output is an inspectable thesis, counterarguments, evidence, forecast scenarios, and limitations. It neither executes trades nor sizes a user's portfolio. There is no claim of profitable performance.
+I built Thesis Ledger as a single-user research workbench that runs locally or on a hosted Python service. The output is an inspectable thesis, counterarguments, evidence, forecast scenarios, and limitations. It neither executes trades nor sizes a user's portfolio. There is no claim of profitable performance.
 
 ## Why a bounded multi-agent workflow?
 
-TradingAgents supplies a strong organizational idea: separate information gathering from opposing research arguments and risk review. We retain four specialist roles, bull/bear researchers, a synthesizer, and a risk reviewer. This is a developer-controlled workflow with role-specific LLM calls, not an unconstrained agent selecting arbitrary tools. The first implementation values auditability over open-ended autonomy.
+TradingAgents supplies a strong organizational idea: separate information gathering from opposing research arguments and risk review. I retain four specialist roles, bull/bear researchers, a synthesizer, and a risk reviewer. This is a developer-controlled workflow with role-specific LLM calls, not an unconstrained agent selecting arbitrary tools. The first implementation values auditability over open-ended autonomy.
 
 A fixed source adapter gathers market, company, and news data. Four analyst calls run concurrently. They share a bounded snapshot rather than a full conversation. A bull and bear debate sequentially for one or two rounds. The manager then sees the forecast; the risk reviewer can veto an actionable stance. Forecast disagreement is surfaced separately.
 
-We do not use majority voting: correlated LLM outputs are not independent statistical evidence. “Confidence” percentages are intentionally absent.
+I avoid majority voting: correlated LLM outputs are not independent statistical evidence. “Confidence” percentages are intentionally absent.
 
 ## The custom twist: independent forecasts and a thesis ledger
 
@@ -24,6 +49,14 @@ We do not use majority voting: correlated LLM outputs are not independent statis
 The SQLite ledger implements structured compression through the validated manager summary, a compact fixed-field record, and deduplication by originating run. Retrieval uses asset/mode/date filters plus lexical overlap ranking, capped at four memories. It does **not** implement SimpleMem's dense embeddings, BM25 multi-index fusion, or LLM intent planner. Structured reports reduce integration complexity but are not guaranteed “lossless.”
 
 ReHarness-inspired revisions are deliberately conservative: users can narrow applicability to the original source snapshot or retire a memory. Feedback is stored as unverified metadata and not inserted into the original claim. This does **not** implement automated source-grounded backward reflection, reward optimization, or outcome settlement. No learning-performance claim is made.
+
+## Chat and market prices
+
+I stream OpenAI replies over the same authenticated API that serves the dashboard. Chat can look up a price, open a saved report, or start the existing research harness. I store completed exchanges in SQLite and use the latest 16 messages as model context. Thesis edits go through the explicit review controls.
+
+The price panel and MCP share a quote service. With Alpaca credentials, the browser refreshes the latest trade every 15 seconds while the chat page is open. With Alpha Vantage real-time entitlement it polls every 60 seconds. The standard Alpha Vantage key returns an end-of-day quote on demand. The interface shows the feed and observation time. Research snapshots still use completed daily bars, so an intraday quote never becomes a partial daily candle.
+
+The Forecast tab fetches daily bars and runs Kronos directly. It skips the analyst team and the extra requests for fundamentals and news.
 
 ## State and recovery
 
