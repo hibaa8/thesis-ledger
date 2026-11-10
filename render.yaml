@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: thesis-ledger
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: LEDGER_API_TOKEN
+        generateValue: true
+      - key: LLM_API_KEY
+        sync: false
+      - key: ALPHAVANTAGE_API_KEY
+        sync: false
+      - key: APCA_API_KEY_ID
+        sync: false
+      - key: APCA_API_SECRET_KEY
+        sync: false
