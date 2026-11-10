@@ -38,11 +38,11 @@ def create_mcp(store=None, harness=None, quotes=None, market=None):
         ticker: str,
         as_of: str,
         horizon: int = 5,
-        mode: str = "demo",
+        mode: str = "live",
         forecast_engine: str = "bootstrap",
         question: str = "What supports or challenges this thesis?",
     ) -> dict:
-        """Run bounded multi-agent research. Demo is synthetic. Live requires configured market and LLM keys. Saves a run and a thesis memory; does not execute trades."""
+        """Run bounded multi-agent research. Uses configured market and model providers. Saves a run and a thesis memory; does not execute trades."""
         return await harness.run(
             ResearchRequest(
                 ticker=ticker,
@@ -61,9 +61,9 @@ def create_mcp(store=None, harness=None, quotes=None, market=None):
 
     @mcp.tool()
     def search_theses(
-        ticker: str, as_of: str, mode: str = "demo", query: str = ""
+        ticker: str, as_of: str, mode: str = "live", query: str = ""
     ) -> list[dict]:
-        """Retrieve up to four compact memories available by a date. Demo and live memories are isolated."""
+        """Retrieve up to four compact memories available by a date. Only memories from the requested data mode are returned."""
         req = ResearchRequest(ticker=ticker, as_of=as_of, mode=mode)
         return store.memories(req.ticker, req.mode, str(req.as_of), query, 4)
 

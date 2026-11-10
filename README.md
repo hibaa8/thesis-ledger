@@ -12,7 +12,7 @@ cp -n .env.example .env
 uv run thesis-ledger
 ```
 
-Open [localhost:8000](http://127.0.0.1:8000). Choose **Research chat** for a conversation or **Research desk** for a structured run. Use **Forecast** to run Kronos on its own. Demo research uses synthetic data and works without credentials.
+Open [localhost:8000](http://127.0.0.1:8000). Choose **Research chat** for a conversation or **Research desk** for a structured run. Use **Forecast** to explore historical-return scenarios or run Kronos when installed.
 
 | Feature | Environment |
 |---|---|

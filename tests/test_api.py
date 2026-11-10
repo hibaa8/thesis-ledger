@@ -11,7 +11,7 @@ def test_ui_api_and_mcp(tmp_path):
         assert client.get("/").status_code == 200
         assert client.get("/static/app.js").status_code == 200
         assert client.get("/health").json()["status"] == "ok"
-        run = client.post("/api/research", json={"ticker": "AAPL"}).json()
+        run = client.post("/api/research", json={"ticker": "AAPL", "mode": "demo"}).json()
         assert run["status"] == "complete", run
         assert client.get("/api/runs/" + run["id"]).json()["id"] == run["id"]
         assert len(client.get("/api/memories").json()) == 1

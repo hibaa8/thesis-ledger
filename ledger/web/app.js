@@ -115,18 +115,6 @@ async function page(name) {
 document
   .querySelectorAll("[data-page]")
   .forEach((b) => (b.onclick = () => page(b.dataset.page)));
-$("sample").onclick = () => {
-  $("mode").value = "demo";
-  $("engine").value = "bootstrap";
-  $("ticker").value = selectedTicker;
-  $("research-form").requestSubmit();
-};
-$("mode").onchange = () =>
-  status(
-    $("mode").value === "demo"
-      ? "Demo uses synthetic prices and scripted reports."
-      : "Live mode requires configured market and model credentials. Daily data may be delayed.",
-  );
 $("research-form").onsubmit = async (e) => {
   e.preventDefault();
   $("run-button").disabled = true;
@@ -140,7 +128,7 @@ $("research-form").onsubmit = async (e) => {
       ticker: $("ticker").value.toUpperCase(),
       as_of: $("asof").value,
       horizon: +$("horizon").value,
-      mode: $("mode").value,
+      mode: "live",
       forecast: $("engine").value,
       use_memory: $("use-memory").checked,
     };
@@ -156,11 +144,7 @@ $("research-form").onsubmit = async (e) => {
     } else {
       run = result;
       render();
-      status(
-        run.request.mode === "demo"
-          ? "SYNTHETIC DEMO · Prices, company facts, and analyst reports are illustrative."
-          : run.snapshot.warnings.join(" "),
-      );
+      status(run.snapshot.warnings.join(" "));
     }
   } catch (err) {
     status(err.message, true);
@@ -193,8 +177,7 @@ function render() {
   $("results").hidden = false;
   $("export").disabled = false;
   $("asset-name").textContent = run.request.ticker;
-  $("data-badge").textContent =
-    run.request.mode === "demo" ? "SYNTHETIC DEMO" : run.snapshot.provider;
+  $("data-badge").textContent = run.snapshot.provider;
   $("run-date").textContent =
     "As of " +
     run.request.as_of +
@@ -250,9 +233,7 @@ function render() {
     .join("");
   $("call-count").textContent =
     run.calls +
-    " " +
-    (run.request.mode === "demo" ? "SCRIPTED STAGES" : "MODEL ATTEMPTS") +
-    " · " +
+    " MODEL ATTEMPTS · " +
     run.memories.length +
     " MEMORIES";
   chart();
@@ -365,12 +346,12 @@ function details() {
       )
       .join(
         "",
-      )}</div><p>Each window sees only preceding bars. Overlapping outcomes and a small sample limit interpretation. Synthetic demo results are not evidence about real markets.</p>`;
+      )}</div><p>Each window sees only preceding bars. Overlapping outcomes and a small sample limit interpretation.</p>`;
   }
   $("detail").innerHTML = html;
 }
 async function loadRuns() {
-  const runs = await api("/runs");
+  const runs = (await api("/runs")).filter((run) => run.request.mode === "live");
   $("run-list").innerHTML = runs.length
     ? runs
         .map(
@@ -396,11 +377,7 @@ function bindRunButtons(container) {
           if (r.status !== "complete") throw Error(r.error);
           await page("research");
           await selectTicker(r.request.ticker, false, r);
-          status(
-            run.request.mode === "demo"
-              ? "Viewing a saved synthetic demo."
-              : "Viewing saved research; source data has not been refreshed.",
-          );
+          status("Viewing saved research from " + r.request.as_of + ".");
         } catch (e) {
           b.textContent = e.message;
         } finally {
@@ -410,7 +387,7 @@ function bindRunButtons(container) {
   );
 }
 async function loadMemory() {
-  const memories = await api("/memories");
+  const memories = (await api("/memories")).filter((memory) => memory.mode === "live");
   $("memory-list").innerHTML = memories.length
     ? memories
         .map(
@@ -471,8 +448,6 @@ api("/config")
   .then(async (c) => {
     liveReady = c.live_ready;
     alpacaReady = c.alpaca_ready;
-    if (!c.live_ready)
-      $("mode").options[1].textContent = "Live (setup required)";
     if (!c.kronos_configured)
       $("engine").options[1].textContent = "Kronos (setup required)";
     if (c.kronos_configured) {
@@ -667,14 +642,14 @@ $("forecast-form").onsubmit = async (e) => {
       body: JSON.stringify({
         ticker: $("forecast-ticker").value.trim().toUpperCase(),
         horizon: Number($("forecast-horizon").value),
-        mode: $("forecast-mode").value,
+        mode: "live",
         forecast: $("forecast-engine").value,
       }),
     });
     chart(result, "forecast-chart", 40);
     $("forecast-status").textContent =
       result.request.ticker + " · " + result.forecast.label + " · " +
-      (result.request.mode === "demo" ? "Synthetic demo" : result.snapshot.provider) +
+      result.snapshot.provider +
       " · Last bar " + result.snapshot.bars.at(-1).date;
     $("forecast-caption").textContent = [result.forecast.disclaimer, ...result.snapshot.warnings.filter(
       (warning) => warning.startsWith("STALE") || warning.startsWith("Daily bars"),

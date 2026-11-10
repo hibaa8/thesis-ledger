@@ -7,7 +7,7 @@ class ResearchRequest(BaseModel):
     ticker: str = Field(default="NVDA", pattern=r"^[A-Z][A-Z0-9.\-]{0,9}$")
     as_of: date = Field(default_factory=date.today)
     horizon: int = Field(default=5, ge=1, le=20)
-    mode: Literal["demo", "live"] = "demo"
+    mode: Literal["demo", "live"] = "live"
     forecast: Literal["bootstrap", "kronos"] = "bootstrap"
     question: str = Field(
         default="What supports or challenges the investment thesis?", max_length=1200

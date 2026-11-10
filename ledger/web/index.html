@@ -67,8 +67,6 @@
             <input id="forecast-ticker" value="NVDA" maxlength="10" required />
             <label for="forecast-horizon">Sessions</label>
             <input id="forecast-horizon" type="number" min="1" max="20" value="5" required />
-            <label for="forecast-mode">Data</label>
-            <select id="forecast-mode"><option value="live">Market data</option><option value="demo">Synthetic demo</option></select>
             <label for="forecast-engine">Model</label>
             <select id="forecast-engine">
               <option value="bootstrap">Historical returns</option>
@@ -154,11 +152,6 @@
                 <option value="20">20 sessions</option>
               </select></label
             ><label
-              >DATA<select id="mode">
-                <option value="demo">Demo fixture</option>
-                <option value="live" selected>Live providers</option>
-              </select></label
-            ><label
               >FORECAST<select id="engine">
                 <option value="bootstrap">Bootstrap baseline</option>
                 <option value="kronos">Kronos-small</option>
@@ -193,7 +186,6 @@
             <span>01 &nbsp; Observe</span><i>→</i><span>02 &nbsp; Debate</span
             ><i>→</i><span>03 &nbsp; Remember</span>
           </div>
-          <button class="secondary" id="sample">Explore an NVDA demo ↗</button>
         </div>
         <div id="results" hidden>
           <div class="asset-row">

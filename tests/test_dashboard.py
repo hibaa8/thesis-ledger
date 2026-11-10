@@ -7,7 +7,7 @@ from ledger.store import Store
 
 def test_dashboard_reuses_live_report_and_ignores_demo(tmp_path):
     store = Store(tmp_path)
-    request = ResearchRequest().model_dump(mode="json")
+    request = ResearchRequest(mode="demo").model_dump(mode="json")
     store.save(
         {
             "id": "demo",

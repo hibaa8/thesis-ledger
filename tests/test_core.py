@@ -33,7 +33,7 @@ def test_invalid_ohlc_and_future_bars():
 def test_end_to_end_memory_and_immutable_revision(tmp_path):
     store = Store(tmp_path)
     h = Harness(store)
-    r = asyncio.run(h.run(ResearchRequest()))
+    r = asyncio.run(h.run(ResearchRequest(mode="demo")))
     assert r["status"] == "complete", r.get("error")
     assert r["decision"]["stance"] == "abstain"
     assert len(r["reports"]) == 8
@@ -53,7 +53,7 @@ def test_end_to_end_memory_and_immutable_revision(tmp_path):
 
 def test_historical_memory_does_not_leak(tmp_path):
     store = Store(tmp_path)
-    r = asyncio.run(Harness(store).run(ResearchRequest(as_of=date(2026, 10, 1))))
+    r = asyncio.run(Harness(store).run(ResearchRequest(mode="demo", as_of=date(2026, 10, 1))))
     assert r["status"] == "complete"
     assert (
         store.memories("NVDA", "demo", "2026-10-02") == []
@@ -74,7 +74,7 @@ def test_resume_reuses_completed_checkpoints(tmp_path, monkeypatch):
 
     monkeypatch.setattr(module, "analyze", fail_bear)
     h = Harness(Store(tmp_path))
-    r = asyncio.run(h.run(ResearchRequest()))
+    r = asyncio.run(h.run(ResearchRequest(mode="demo")))
     assert r["status"] == "failed"
     assert len(r["reports"]) == 5
     before = r["snapshot"]
