@@ -44,7 +44,7 @@ def test_llm_citation_validation(monkeypatch):
         lambda **kwargs: real_client(transport=httpx.MockTransport(mock), **kwargs),
     )
     with pytest.raises(ValueError, match="unknown evidence"):
-        asyncio.run(analyze("technical", {"evidence": [{"id": "prices"}]}, "live"))
+        asyncio.run(analyze("technical", {"evidence": [{"id": "prices", "kind": "market"}]}, "live"))
 
 
 def test_kronos_adapter_contract(monkeypatch):
@@ -93,3 +93,57 @@ def test_fundamentals_abstains_without_company_financials(monkeypatch):
     assert report["stance"] == "abstain"
     assert report["evidence_ids"] == []
     assert "no company fundamentals" in report["summary"]
+
+
+
+@pytest.mark.parametrize(
+    ("role", "kind", "citation"),
+    [
+        ("technical", "market", "prices"),
+        ("fundamentals", "fundamentals", "filing"),
+        ("news", "news", "headline"),
+    ],
+)
+def test_specialists_receive_only_their_evidence(monkeypatch, role, kind, citation):
+    monkeypatch.setenv("LLM_API_KEY", "test")
+    monkeypatch.setenv("LLM_MODEL", "test-model")
+    context = {
+        "ticker": "NVDA",
+        "evidence": [
+            {"id": "prices", "kind": "market"},
+            {"id": "filing", "kind": "fundamentals"},
+            {"id": "headline", "kind": "news"},
+        ],
+        "metrics": {"rsi": 24},
+        "memories": [{"summary": "Old price move"}],
+    }
+    real_client = httpx.AsyncClient
+
+    def mock(request):
+        payload = json.loads(request.content)
+        scoped = json.loads(payload["messages"][1]["content"])
+        assert scoped["evidence"] == [{"id": citation, "kind": kind}]
+        assert ("metrics" in scoped) == (role == "technical")
+        assert "memories" not in scoped
+        report = dict(
+            role=role, stance="neutral", summary="Role-specific finding.",
+            evidence_ids=[citation], risks=[], invalidation="Recheck when evidence changes.",
+        )
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": json.dumps(report)}}]}
+        )
+
+    monkeypatch.setattr(
+        httpx, "AsyncClient",
+        lambda **kwargs: real_client(transport=httpx.MockTransport(mock), **kwargs),
+    )
+    assert asyncio.run(analyze(role, context, "live"))["evidence_ids"] == [citation]
+
+
+def test_sentiment_abstains_without_direct_data(monkeypatch):
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    context = {"evidence": [{"id": "headline", "kind": "news"}], "metrics": {"rsi": 24}}
+    report = asyncio.run(analyze("sentiment", context, "live"))
+    assert report["stance"] == "abstain"
+    assert report["evidence_ids"] == []
+    assert "No direct investor sentiment" in report["summary"]
