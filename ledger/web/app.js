@@ -491,10 +491,22 @@ function newChatId() {
   return id;
 }
 
+const chatMarkdown = window.markdownit?.({ html: false });
+if (chatMarkdown) {
+  chatMarkdown.validateLink = (url) => /^https?:\/\//i.test(url);
+  chatMarkdown.renderer.rules.image = (tokens, index) => esc(tokens[index].content);
+}
+
+function renderChatAnswer(node, text) {
+  if (chatMarkdown) node.innerHTML = chatMarkdown.render(text);
+  else node.textContent = text;
+}
+
 function chatBubble(role, text) {
   const node = document.createElement("div");
   node.className = "chat-message " + role;
-  node.textContent = text;
+  if (role === "assistant") renderChatAnswer(node, text);
+  else node.textContent = text;
   $("chat-messages").append(node);
   node.scrollIntoView({ block: "nearest" });
   return node;
@@ -562,6 +574,14 @@ $("chat-form").onsubmit = async (e) => {
   chatBubble("user", message);
   const answer = chatBubble("assistant", "");
   $("chat-status").textContent = "Thinking…";
+  let answerText = "";
+  let renderFrame = null;
+  const updateAnswer = () => {
+    renderFrame = null;
+    renderChatAnswer(answer, answerText);
+    const messages = $("chat-messages");
+    messages.scrollTop = messages.scrollHeight;
+  };
   let done = false;
   try {
     const response = await fetch("/api/chat", {
@@ -595,8 +615,8 @@ $("chat-form").onsubmit = async (e) => {
         for (const line of lines) {
           const item = JSON.parse(line);
           if (item.type === "delta") {
-            answer.append(document.createTextNode(item.text));
-            $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
+            answerText += item.text;
+            if (renderFrame === null) renderFrame = requestAnimationFrame(updateAnswer);
           }
           if (item.type === "status") $("chat-status").textContent = item.message;
           if (item.type === "report") $("chat-status").textContent = "Report saved · " + item.id;
@@ -611,9 +631,13 @@ $("chat-form").onsubmit = async (e) => {
     $("chat-status").textContent = "";
   } catch (err) {
     $("chat-status").textContent = err.message;
-    if (!answer.textContent) answer.remove();
+    if (!answerText) answer.remove();
     $("chat-input").value ||= message;
   } finally {
+    if (renderFrame !== null) {
+      cancelAnimationFrame(renderFrame);
+      updateAnswer();
+    }
     chatBusy = false;
     $("chat-send").disabled = false;
     $("new-chat").disabled = false;
