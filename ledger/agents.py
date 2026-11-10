@@ -26,6 +26,9 @@ ROLES = {
         "FINRA short-sale volume alone supports a neutral stance. Never treat it as outstanding "
         "short interest, investor conviction, or a directional signal. If ticker-specific article "
         "tone scores are present, describe their direction and agreement as media tone only. "
+        "When cited X posts are present, compare their themes with the news tone. "
+        "Distinguish first-hand statements and social discussion from measured investor positioning. "
+        "A few selected posts cannot establish consensus or drive a directional call by themselves. "
         "Cite the supplied sources and explain what the measurements leave uncertain."
     ),
     "bull": "Build the strongest supported bullish thesis; address the bear case when available.",

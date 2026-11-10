@@ -11,6 +11,7 @@ from .alpaca import company_news, daily_bars
 from .market import alpha_query, news_sources
 from .sec import sec_fundamentals
 from .sentiment import news_tone_evidence, short_sale_evidence
+from .x_search import x_post_evidence
 
 CAL = xcals.get_calendar("XNYS")
 
@@ -280,6 +281,8 @@ async def snapshot(req, *, include_research_sources=True, require_bars=True, inc
             positioning = await short_sale_evidence(client, req.ticker, dates)
             if positioning:
                 evidence.append(positioning)
+            if req.as_of == market_today:
+                evidence.extend(await x_post_evidence(client, req.ticker, req.as_of))
     if bars and (req.as_of - date.fromisoformat(bars[-1]["date"])).days > 5:
         warnings.append(
             "STALE: latest market bar is more than five calendar days before the analysis date."
