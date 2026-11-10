@@ -1071,7 +1071,11 @@ body:has(#chat.active) > .workspace {
 .market-up { color: #83e0bd; }
 .market-down { color: #ff9b9b; }
 
-.market-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 28%); overflow: hidden; }
+.market-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 28%);
+  gap: 16px;
+}
 .intraday-panel { min-width: 0; padding: 22px; }
 .instrument-head, .intraday-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .instrument-head #desk-symbol { display: block; font-size: clamp(1.65rem, 4vw, 2.55rem); margin: 3px 0 0; }
@@ -1087,18 +1091,49 @@ body:has(#chat.active) > .workspace {
 .candle-grid { stroke: #2e3c43; }
 .candle-up { fill: #76dec2; stroke: #76dec2; }
 .candle-down { fill: #ff9189; stroke: #ff9189; }
-.market-workspace .watchlist { position: static; width: auto; padding: 0; border: 0; border-left: 1px solid #354247; background: #151e24; }
+.market-workspace .watchlist {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  /* The chart sets the grid row height. Extra quotes scroll inside the watchlist. */
+  contain: size;
+}
 .watchlist-head { padding: 16px 14px 8px; }
 .watchlist-head p { color: #aab9ba; font-size: .78rem; margin: 5px 0; }
 .watchlist-labels, .watch-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; text-align: right; align-items: center; }
 .watchlist-labels > :first-child, .watch-row > :first-child { text-align: left; }
 .watchlist-labels { padding: 6px 14px; font-size: .73rem; color: #9cadb1; }
-.watchlist .market-quotes { display: block; max-height: 396px; overflow-y: auto; }
+.watchlist .market-quotes {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+.watchlist .market-quotes:focus-visible { outline-offset: -3px; }
 .watch-row { width: 100%; min-height: 44px; padding: 5px 14px; color: inherit; background: transparent; border: 0; border-top: 1px solid #2a373d; border-radius: 0; cursor: pointer; font: inherit; font-size: .81rem; font-variant-numeric: tabular-nums; }
 .watch-row:hover, .watch-row[aria-pressed="true"] { background: #243b3c; }
-#activity-section { border-top: 1px solid #354247; }
+.market-activity-panel { margin-top: 16px; padding-bottom: 12px; }
+.activity-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 14px;
+}
+@media (max-width: 1100px) {
+  .activity-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 480px) {
+  .activity-grid { grid-template-columns: 1fr; }
+}
+.activity-card { min-width: 0; border: 1px solid var(--line); border-radius: 5px; }
+.activity-card .watch-row { border-top: 0; border-radius: 4px; }
 .activity-headline { display: block; padding: 0 14px 10px; color: #a5e8d0; font-size: .75rem; overflow-wrap: anywhere; }
-.watchlist #market-warning { padding: 0 14px; }
+.activity-headline:hover { text-decoration: underline; text-underline-offset: 3px; }
+.watchlist #market-warning { padding: 8px 14px; margin: 0; }
+.watchlist #market-warning:empty { display: none; }
 .headline-board { margin: 26px 0; }
 .headline-board-header {
   display: flex;
@@ -1156,8 +1191,9 @@ a.headline-link:hover { color: var(--green); text-decoration: underline; text-un
 .headline-empty { color: #a3b2bb; padding: 16px 0; }
 @media (max-width: 770px) {
   .market-workspace { grid-template-columns: 1fr; }
+  .market-workspace .watchlist { contain: none; }
+  .watchlist .market-quotes { flex: auto; max-height: 264px; }
   .headline-switch button { min-height: 44px; }
-  .market-workspace .watchlist { border-left: 0; border-top: 1px solid #354247; }
   .intraday-panel { padding: 14px; }
 }
 

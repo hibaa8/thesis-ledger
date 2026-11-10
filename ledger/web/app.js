@@ -752,7 +752,13 @@ async function refreshMarket() {
     activity.replaceChildren();
     for (const stock of brief.activity || []) {
       const item = document.createElement("div");
-      item.append(watchRow(stock));
+      item.className = "activity-card";
+      const row = watchRow(stock);
+      row.onclick = () => {
+        selectTicker(stock.ticker);
+        $("market-chart").scrollIntoView({ block: "start" });
+      };
+      item.append(row);
       if (stock.headline?.url.startsWith("https://")) {
         const link = document.createElement("a");
         link.className = "activity-headline";

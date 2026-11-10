@@ -111,8 +111,8 @@
           </div>
           <button id="desk-deep" class="primary" type="button">Open Deep Research ↗</button>
         </div>
-        <section class="market-workspace panel" aria-label="Market desk">
-          <div class="intraday-panel">
+        <section class="market-workspace" aria-label="Market desk">
+          <div id="market-chart" class="panel intraday-panel">
             <div class="instrument-head">
               <div><span class="eyebrow">SELECTED SYMBOL</span><strong id="desk-symbol">NVDA</strong></div>
               <form id="symbol-form">
@@ -124,19 +124,19 @@
             <div class="intraday-meta"><strong>5-minute candles</strong><span id="intraday-status" role="status">Loading session…</span></div>
             <div id="intraday-chart"></div>
           </div>
-          <aside class="watchlist">
-            <div class="watchlist-head"><h2>Watchlist</h2><p id="market-summary" role="status">Loading market prices…</p></div>
+          <section class="panel watchlist" aria-labelledby="watchlist-title">
+            <div class="watchlist-head"><h2 id="watchlist-title">Watchlist</h2><p id="market-summary" role="status">Loading market prices…</p></div>
             <div class="watchlist-labels"><span>Symbol</span><span>Last</span><span>Move</span></div>
-            <div id="market-quotes" class="market-quotes"></div>
-            <section id="activity-section" hidden aria-labelledby="activity-title">
-              <div class="watchlist-head">
-                <h2 id="activity-title">Movers &amp; headlines</h2>
-                <p>Latest Alpaca screener session and company news from the past 24 hours.</p>
-              </div>
-              <div id="market-activity" class="market-quotes"></div>
-            </section>
+            <div id="market-quotes" class="market-quotes" role="region" aria-label="Watchlist prices" tabindex="0"></div>
             <p id="market-warning" class="subtitle"></p>
-          </aside>
+          </section>
+        </section>
+        <section id="activity-section" class="panel market-activity-panel" hidden aria-labelledby="activity-title">
+          <div class="watchlist-head">
+            <h2 id="activity-title">Movers &amp; headlines</h2>
+            <p>Latest Alpaca screener session and company news from the past 24 hours.</p>
+          </div>
+          <div id="market-activity" class="activity-grid"></div>
         </section>
         <section class="panel headline-board" aria-labelledby="headlines-title">
           <div class="headline-board-header">
