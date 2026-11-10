@@ -81,9 +81,10 @@ def test_chat_streams_tool_grounded_answer_and_saves_history(tmp_path, monkeypat
 def test_stock_snapshot_keeps_company_evidence_when_prices_are_unavailable(monkeypatch):
     from ledger.chat import Chat
 
-    async def company_snapshot(request, *, require_bars):
+    async def company_snapshot(request, *, require_bars, include_sentiment):
         assert request.ticker == "GOOGL"
         assert require_bars is False
+        assert include_sentiment is False
         return {
             "bars": [],
             "warnings": ["Daily price history was unavailable."],

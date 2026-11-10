@@ -10,6 +10,7 @@ import exchange_calendars as xcals
 from .alpaca import company_news, daily_bars
 from .market import alpha_query, news_sources
 from .sec import sec_fundamentals
+from .sentiment import news_tone_evidence, short_sale_evidence
 
 CAL = xcals.get_calendar("XNYS")
 
@@ -103,7 +104,7 @@ def demo_snapshot(ticker, as_of):
     )
 
 
-async def snapshot(req, *, include_research_sources=True, require_bars=True):
+async def snapshot(req, *, include_research_sources=True, require_bars=True, include_sentiment=True):
     if req.mode == "demo":
         return demo_snapshot(req.ticker, req.as_of)
     market_today = datetime.now(ZoneInfo("America/New_York")).date()
@@ -157,7 +158,6 @@ async def snapshot(req, *, include_research_sources=True, require_bars=True):
         warnings = [
             "Daily bars are unadjusted. Corporate actions can distort forecasts."
             if bars else "Daily price history was unavailable.",
-            "Social sentiment is unavailable; news is not a proxy for social sentiment.",
         ]
         if include_research_sources and req.as_of == date.today():
             for function, kind, params in [
@@ -209,6 +209,8 @@ async def snapshot(req, *, include_research_sources=True, require_bars=True):
                                 "%Y%m%d"
                             ):
                                 continue
+                            if include_sentiment and (tone := news_tone_evidence(n, req.ticker, req.as_of, i)):
+                                evidence.append(tone)
                             evidence.append(
                                 dict(
                                     id=f"news-{i}",
@@ -272,6 +274,12 @@ async def snapshot(req, *, include_research_sources=True, require_bars=True):
             except (ValueError, httpx.HTTPError, KeyError, TypeError):
                 warnings.append("No SEC fundamentals were available by the analysis date.")
             warnings.append("Historical runs exclude current news to avoid look-ahead leakage.")
+        if include_research_sources and include_sentiment:
+            sentiment_cutoff = min(cutoff, req.as_of - timedelta(days=1))
+            dates = sessions(sentiment_cutoff - timedelta(days=14), sentiment_cutoff)[-5:]
+            positioning = await short_sale_evidence(client, req.ticker, dates)
+            if positioning:
+                evidence.append(positioning)
     if bars and (req.as_of - date.fromisoformat(bars[-1]["date"])).days > 5:
         warnings.append(
             "STALE: latest market bar is more than five calendar days before the analysis date."

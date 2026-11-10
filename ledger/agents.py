@@ -22,8 +22,11 @@ ROLES = {
         "even when an article mentions them. Avoid inferring causation from headlines."
     ),
     "sentiment": (
-        "Assess directly observed investor sentiment or positioning. Name the population, "
-        "measurement window, and limits of the supplied survey, flow, or positioning data."
+        "Report the dates, measured activity, and how it compares with recent sessions. "
+        "FINRA short-sale volume alone supports a neutral stance. Never treat it as outstanding "
+        "short interest, investor conviction, or a directional signal. If ticker-specific article "
+        "tone scores are present, describe their direction and agreement as media tone only. "
+        "Cite the supplied sources and explain what the measurements leave uncertain."
     ),
     "bull": "Build the strongest supported bullish thesis; address the bear case when available.",
     "bear": "Build the strongest supported bearish thesis; challenge assumptions in the bull case.",
@@ -132,6 +135,14 @@ async def analyze(role, context, mode):
                 summary=summary,
                 evidence_ids=[],
                 invalidation=invalidation,
+            ).model_dump()
+        if role == "sentiment" and [item["id"] for item in context["evidence"]] == ["finra-short-volume"]:
+            return AgentReport(
+                role=role,
+                stance="neutral",
+                summary=context["evidence"][0]["text"],
+                evidence_ids=["finra-short-volume"],
+                invalidation="Compare the next published session to see whether the change persists.",
             ).model_dump()
     key = os.getenv("LLM_API_KEY")
     model = os.getenv("LLM_MODEL")

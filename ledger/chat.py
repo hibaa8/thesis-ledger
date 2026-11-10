@@ -80,7 +80,7 @@ class Chat:
         if name == "stock_snapshot":
             request = ResearchRequest(ticker=args["ticker"].strip().upper(), mode="live")
             data, quote = await asyncio.gather(
-                snapshot(request, require_bars=False),
+                snapshot(request, require_bars=False, include_sentiment=False),
                 self.quotes.get(request.ticker),
                 return_exceptions=True,
             )
