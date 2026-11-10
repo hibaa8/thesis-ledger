@@ -1,4 +1,3 @@
-import asyncio
 import hashlib
 import math
 import os
@@ -7,6 +6,8 @@ import httpx
 import numpy as np
 import pandas as pd
 import exchange_calendars as xcals
+
+from .market import alpha_query, news_sources
 
 CAL = xcals.get_calendar("XNYS")
 
@@ -109,25 +110,9 @@ async def snapshot(req, *, include_research_sources=True):
             "Live data requires ALPHAVANTAGE_API_KEY. Select Demo to explore without credentials."
         )
     async with httpx.AsyncClient(timeout=30) as client:
-        last_request = None
 
         async def get(function, **params):
-            nonlocal last_request
-            clock = asyncio.get_running_loop()
-            if last_request is not None:
-                await asyncio.sleep(max(0, 1.1 - (clock.time() - last_request)))
-            last_request = clock.time()
-            r = await client.get(
-                "https://www.alphavantage.co/query",
-                params=dict(function=function, apikey=key, **params),
-            )
-            r.raise_for_status()
-            data = r.json()
-            if any(k in data for k in ["Error Message", "Note", "Information"]):
-                raise ValueError(
-                    "Market provider rejected the request or reached its rate limit"
-                )
-            return data
+            return await alpha_query(client, function, **params)
 
         prices = await get("TIME_SERIES_DAILY", symbol=req.ticker, outputsize="compact")
         rows = prices.get("Time Series (Daily)", {})
@@ -161,9 +146,7 @@ async def snapshot(req, *, include_research_sources=True):
             "Daily bars are unadjusted. Corporate actions can distort forecasts.",
             "Social sentiment is unavailable; news is not a proxy for social sentiment.",
         ]
-        if not include_research_sources:
-            pass
-        elif req.as_of == date.today():
+        if include_research_sources and req.as_of == date.today():
             for function, kind, params in [
                 ("OVERVIEW", "fundamentals", dict(symbol=req.ticker)),
                 (
@@ -225,7 +208,23 @@ async def snapshot(req, *, include_research_sources=True):
                     warnings.append(
                         f"{kind.title()} unavailable; research must abstain on missing evidence."
                     )
-        else:
+            public_news = await news_sources()
+            for source, items in public_news.items():
+                if isinstance(items, Exception) or not items:
+                    warnings.append(f"{source} headlines unavailable.")
+                    continue
+                for article in items[:3]:
+                    evidence.append(
+                        dict(
+                            id=f"market-news-{len(evidence)}",
+                            kind="news",
+                            title=article["title"],
+                            url=article["url"],
+                            published=article["published"],
+                            text=f"{source} market headline. Use as general context; ticker relevance is unverified.",
+                        )
+                    )
+        elif include_research_sources:
             warnings.append(
                 "Historical runs exclude current fundamentals and news to avoid look-ahead leakage."
             )

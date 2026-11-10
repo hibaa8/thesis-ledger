@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 from .chat import Chat
 from .data import snapshot
 from .forecast import forecast_bounded
+from .market import MarketBrief
 from .quotes import Quotes, quote_interval
 from .config import load_config
 
@@ -37,9 +38,10 @@ def create_app(directory=None):
     store = Store(directory)
     harness = Harness(store)
     quotes = Quotes()
-    chat = Chat(store, harness, quotes)
+    market = MarketBrief(quotes)
+    chat = Chat(store, harness, quotes, market)
     forecast_lock = asyncio.Lock()
-    mcp = create_mcp(store, harness, quotes)
+    mcp = create_mcp(store, harness, quotes, market)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -108,6 +110,28 @@ def create_app(directory=None):
             )
         return await harness.run(req)
 
+    @app.get("/api/market")
+    async def market_overview():
+        return await market.get()
+
+    @app.get("/api/dashboard")
+    def dashboard():
+        return store.latest_live_report("NVDA")
+
+    @app.post("/api/dashboard")
+    async def refresh_dashboard():
+        req = ResearchRequest(ticker="NVDA", mode="live")
+        saved = store.latest_live_report(req.ticker)
+        if saved and saved["request"]["as_of"] == req.as_of.isoformat():
+            return saved
+        if harness.lock.locked():
+            raise HTTPException(409, "Research is already running.")
+        if not config()["live_ready"]:
+            raise HTTPException(
+                503, "Configure OpenAI and Alpha Vantage to load live research."
+            )
+        return await harness.run(req)
+
     @app.get("/api/runs")
     def runs():
         return [
@@ -140,6 +164,10 @@ def create_app(directory=None):
 
     @app.post("/api/forecast")
     async def forecast(req: ResearchRequest):
+        key = f"kronos-small:{req.mode}:{req.ticker}:{req.horizon}:{req.as_of}"
+        cached = store.cached_forecast(key)
+        if cached is not None:
+            return cached
         if not os.getenv("KRONOS_PATH"):
             raise HTTPException(
                 503, "Configure KRONOS_PATH and install Kronos to run this forecast."
@@ -159,7 +187,13 @@ def create_app(directory=None):
                     else "Market data request failed."
                 )
                 raise HTTPException(503, detail) from None
-        return {"forecast": result, "snapshot": market, "request": req.model_dump()}
+            payload = {
+                "forecast": result,
+                "snapshot": market,
+                "request": req.model_dump(mode="json"),
+            }
+            store.save_forecast(key, payload)
+        return payload
 
     @app.get("/api/quote/{ticker}")
     async def quote(ticker: str):

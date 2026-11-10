@@ -5,6 +5,7 @@ import time
 
 import httpx
 
+from .market import alpha_query
 from .models import ResearchRequest
 from .store import now
 
@@ -25,11 +26,11 @@ class Quotes:
         interval = quote_interval()
         async with self.lock:
             cached = self.cache.get(ticker)
-            if cached and time.monotonic() - cached[0] < (interval or 900):
+            if cached and time.monotonic() - cached[0] < (interval or 4 * 3600):
                 return cached[1]
             try:
                 quote = await self.fetch(ticker)
-            except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+            except (httpx.HTTPError, KeyError, TypeError, ValueError):
                 raise ValueError(
                     "Quote unavailable. Check the provider key, feed entitlement, or request limit."
                 ) from None
@@ -45,7 +46,7 @@ class Quotes:
                 if feed not in {"iex", "sip"}:
                     raise ValueError("Unsupported Alpaca feed")
                 response = await client.get(
-                    f"https://data.alpaca.markets/v2/stocks/{ticker}/trades/latest",
+                    f"https://data.alpaca.markets/v2/stocks/{ticker}/snapshot",
                     params={"feed": feed},
                     headers={
                         "APCA-API-KEY-ID": os.environ["APCA_API_KEY_ID"],
@@ -53,22 +54,22 @@ class Quotes:
                     },
                 )
                 response.raise_for_status()
-                trade = response.json()["trade"]
+                data = response.json()
+                trade = data["latestTrade"]
                 price, as_of = float(trade["p"]), trade["t"]
+                previous = (data.get("prevDailyBar") or {}).get("c")
+                change = (price / previous - 1) * 100 if previous else None
                 source, freshness = f"Alpaca {feed.upper()}", "Latest trade"
             else:
-                key = os.getenv("ALPHAVANTAGE_API_KEY")
-                if not key:
-                    raise ValueError("Missing market key")
-                params = {"function": "GLOBAL_QUOTE", "symbol": ticker, "apikey": key}
                 realtime = os.getenv("LEDGER_AV_REALTIME") == "1"
+                params = {"symbol": ticker}
                 if realtime:
                     params["entitlement"] = "realtime"
-                response = await client.get(
-                    "https://www.alphavantage.co/query", params=params
-                )
-                response.raise_for_status()
-                data = response.json()["Global Quote"]
+                data = (await alpha_query(client, "GLOBAL_QUOTE", **params))[
+                    "Global Quote"
+                ]
+                raw_change = data.get("10. change percent")
+                change = float(raw_change.rstrip("%")) if raw_change else None
                 price, as_of = float(data["05. price"]), data["07. latest trading day"]
                 source = "Alpha Vantage"
                 freshness = (
@@ -81,6 +82,9 @@ class Quotes:
         return dict(
             ticker=ticker,
             price=price,
+            change_percent=change
+            if change is not None and math.isfinite(change)
+            else None,
             as_of=as_of,
             source=source,
             freshness=freshness,

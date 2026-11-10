@@ -108,6 +108,16 @@
             ↓ &nbsp; Export research
           </button>
         </div>
+        <section class="panel market-panel" aria-label="Market brief">
+          <div class="eyebrow">MARKET BRIEF</div>
+          <h2>U.S. market snapshot</h2>
+          <p id="market-summary" role="status">Fetching market prices and headlines…</p>
+          <div id="market-quotes" class="market-quotes"></div>
+          <h3>Latest headlines</h3>
+          <ul id="market-news" class="market-news"></ul>
+          <p id="market-warning" class="subtitle"></p>
+        </section>
+        <div id="desk-quote" class="quote-card" aria-live="polite"></div>
         <form id="research-form" class="research-form">
           <div class="form-top">
             <label
@@ -128,7 +138,7 @@
             ><label
               >DATA<select id="mode">
                 <option value="demo">Demo fixture</option>
-                <option value="live">Live providers</option>
+                <option value="live" selected>Live providers</option>
               </select></label
             ><label
               >FORECAST<select id="engine">
@@ -153,8 +163,7 @@
           </div>
         </form>
         <div id="status" role="status" aria-live="polite" class="status">
-          Demo mode uses synthetic data and scripted analyst reports. No API
-          keys needed.
+          Loading the latest live research…
         </div>
         <div id="empty" class="empty">
           <div class="orb">◈</div>
@@ -282,8 +291,12 @@
           </section>
         </div>
         <section class="panel prose">
-          <h2>Six tools. One evidence trail.</h2>
+          <h2>Research tools</h2>
           <div class="tools-grid">
+            <div>
+              <code>market_brief</code>
+              <p>Read market moves and sourced headlines.</p>
+            </div>
             <div>
               <code>latest_price</code>
               <p>Get the latest price with its feed and observation time.</p>

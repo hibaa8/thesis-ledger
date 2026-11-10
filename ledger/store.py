@@ -1,4 +1,6 @@
 import hashlib
+import math
+from collections import Counter
 import json
 import os
 import re
@@ -24,6 +26,7 @@ class Store:
             CREATE TABLE IF NOT EXISTS chat_messages(
                 id INTEGER PRIMARY KEY, session TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL);
             CREATE INDEX IF NOT EXISTS chat_session ON chat_messages(session, id);
+            CREATE TABLE IF NOT EXISTS forecasts(cache_key TEXT PRIMARY KEY, state TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY, created TEXT, state TEXT);
             CREATE TABLE IF NOT EXISTS memories(id TEXT PRIMARY KEY, run_id TEXT UNIQUE, ticker TEXT,
                 mode TEXT, as_of TEXT, created TEXT, body TEXT, digest TEXT);
@@ -56,6 +59,33 @@ class Store:
                 "SELECT state FROM runs ORDER BY created DESC LIMIT 100"
             ).fetchall()
         return [json.loads(r[0]) for r in rows]
+
+    def latest_live_report(self, ticker):
+        with self.connect() as db:
+            row = db.execute(
+                """SELECT state FROM runs
+                WHERE json_extract(state, '$.status') = 'complete'
+                  AND json_extract(state, '$.request.mode') = 'live'
+                  AND json_extract(state, '$.request.ticker') = ?
+                  AND json_extract(state, '$.request.as_of') <= date('now')
+                ORDER BY json_extract(state, '$.request.as_of') DESC, created DESC LIMIT 1""",
+                (ticker,),
+            ).fetchone()
+        return json.loads(row[0]) if row else None
+
+    def cached_forecast(self, key):
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT state FROM forecasts WHERE cache_key=?", (key,)
+            ).fetchone()
+        return json.loads(row[0]) if row else None
+
+    def save_forecast(self, key, result):
+        with self.connect() as db:
+            db.execute(
+                "INSERT OR REPLACE INTO forecasts VALUES (?, ?)",
+                (key, json.dumps(result)),
+            )
 
     def remember(self, run):
         body = {
@@ -108,10 +138,22 @@ class Store:
                 m["scope"] = m["revisions"][-1]["scope"]
                 if m["scope"] == "retire" and as_of:
                     continue
-            m["relevance"] = len(
-                terms & set(re.findall(r"\w+", json.dumps(m["body"]).lower()))
-            )
             out.append(m)
+        # SimpleMem-inspired sparse retrieval after symbolic time and scope filters.
+        docs = [Counter(re.findall(r"\w+", json.dumps(m["body"]).lower())) for m in out]
+        lengths = [sum(doc.values()) for doc in docs]
+        avg = sum(lengths) / len(lengths) if lengths else 1
+        frequency = {term: sum(term in doc for doc in docs) for term in terms}
+        for memory, doc, length in zip(out, docs, lengths):
+            memory["relevance"] = sum(
+                math.log1p(
+                    (len(docs) - frequency[term] + 0.5) / (frequency[term] + 0.5)
+                )
+                * (doc[term] * 2.2)
+                / (doc[term] + 1.2 * (0.25 + 0.75 * length / avg))
+                for term in terms
+                if doc[term]
+            )
         return sorted(out, key=lambda m: (m["relevance"], m["created"]), reverse=True)[
             :limit
         ]

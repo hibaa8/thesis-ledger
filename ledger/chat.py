@@ -28,6 +28,7 @@ def tool(name, description, **properties):
 
 
 TOOLS = [
+    tool("market_brief", "Get market watchlist moves and recent sourced headlines."),
     tool(
         "latest_price",
         "Get the latest available market price.",
@@ -49,13 +50,16 @@ def event(kind, **fields):
 
 
 class Chat:
-    def __init__(self, store, harness, quotes):
+    def __init__(self, store, harness, quotes, market):
         self.store = store
         self.harness = harness
         self.quotes = quotes
+        self.market = market
         self.lock = asyncio.Lock()
 
     async def execute(self, name, args):
+        if name == "market_brief":
+            return await self.market.get()
         if name == "latest_price":
             return await self.quotes.get(args["ticker"])
         if name == "read_report":
@@ -100,7 +104,7 @@ class Chat:
         system = (
             f"You are Thesis Ledger, an evidence-first US equity research assistant. "
             f"Today is {date.today().isoformat()}. Selected ticker: {ticker}. "
-            "Use tools for market prices or live company facts. Never invent prices, sources or report IDs. "
+            "Use tools for market prices or live company facts. Use market_brief for market-wide questions. Never invent prices, sources or report IDs. "
             "Report feed, data time and freshness for prices; a prior session price is not a current tick. "
             "Read saved reports for follow-ups when a report ID is known. "
             "Run full research only when the user requests it. Cite report IDs and evidence URLs. "
