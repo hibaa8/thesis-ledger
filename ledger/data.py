@@ -109,8 +109,14 @@ async def snapshot(req):
             "Live data requires ALPHAVANTAGE_API_KEY. Select Demo to explore without credentials."
         )
     async with httpx.AsyncClient(timeout=30) as client:
+        last_request = None
 
         async def get(function, **params):
+            nonlocal last_request
+            clock = asyncio.get_running_loop()
+            if last_request is not None:
+                await asyncio.sleep(max(0, 1.1 - (clock.time() - last_request)))
+            last_request = clock.time()
             r = await client.get(
                 "https://www.alphavantage.co/query",
                 params=dict(function=function, apikey=key, **params),
