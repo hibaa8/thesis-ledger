@@ -383,9 +383,8 @@ async function loadRuns() {
               method: "POST",
             });
           if (r.status !== "complete") throw Error(r.error);
-          run = r;
           await page("research");
-          render();
+          await selectTicker(r.request.ticker, false, r);
           status(
             run.request.mode === "demo"
               ? "Viewing a saved synthetic demo."
@@ -688,7 +687,7 @@ $("symbol-form").onsubmit = (event) => {
   selectTicker($("symbol-search").value);
 };
 
-async function selectTicker(value, autoResearch = false) {
+async function selectTicker(value, autoResearch = false, savedReport = null) {
   const ticker = value.trim().toUpperCase();
   if (!/^[A-Z][A-Z0-9.\-]{0,9}$/.test(ticker)) {
     $("intraday-status").textContent = "Enter a valid U.S. ticker.";
@@ -712,6 +711,11 @@ async function selectTicker(value, autoResearch = false) {
   refreshQuote("desk-quote", "ticker", "research");
   refreshIntraday(ticker);
   loadCompanyNews(ticker, version);
+  if (savedReport) {
+    run = savedReport;
+    render();
+    return;
+  }
   status("Looking for saved " + ticker + " research…");
   try {
     const path = "/dashboard?ticker=" + encodeURIComponent(ticker);
