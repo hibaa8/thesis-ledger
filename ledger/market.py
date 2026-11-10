@@ -1,12 +1,16 @@
 import asyncio
+import math
 import os
+import re
 import time
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from weakref import WeakKeyDictionary
 
 import httpx
+
+from .alpaca import alpaca_headers
 
 
 MARKET_SYMBOLS = ("SPY", "QQQ", "DIA", "IWM", "AAPL", "MSFT", "NVDA")
@@ -79,6 +83,101 @@ async def news_sources():
     return dict(zip(NEWS_FEEDS, feeds))
 
 
+def watch_symbol(value):
+    return isinstance(value, str) and re.fullmatch(r"[A-Z][A-Z0-9.\-]{0,9}", value)
+
+
+def discover_stocks(movers, news, now):
+    pinned = set(MARKET_SYMBOLS + ALPACA_EXTRA_SYMBOLS)
+    active = {}
+    for side in ("gainers", "losers"):
+        count = 0
+        for item in movers.get(side, []):
+            symbol, price, move = item.get("symbol"), item.get("price"), item.get("percent_change")
+            if (
+                not watch_symbol(symbol) or symbol in pinned or symbol in active
+                or not isinstance(price, (int, float)) or not math.isfinite(price) or price <= 0
+                or not isinstance(move, (int, float)) or not math.isfinite(move) or abs(move) < 3
+            ):
+                continue
+            active[symbol] = dict(
+                ticker=symbol, price=price, change_percent=move,
+                source="Alpaca SIP movers", as_of=movers.get("last_updated"),
+            )
+            count += 1
+            if count == 2:
+                break
+
+    recent = []
+    for item in news.get("news", []):
+        try:
+            published = datetime.fromisoformat(item.get("created_at", ""))
+            if not now - timedelta(hours=24) <= published <= now:
+                continue
+        except (ValueError, TypeError):
+            continue
+        if item.get("headline") and (item.get("url") or "").startswith("https://"):
+            recent.append((published, item))
+    news_count = 0
+    for published, item in sorted(recent, key=lambda pair: pair[0], reverse=True):
+        for symbol in item.get("symbols") or []:
+            if not watch_symbol(symbol) or symbol in pinned:
+                continue
+            if symbol not in active:
+                if news_count >= 4:
+                    continue
+                active[symbol] = dict(ticker=symbol, price=None, change_percent=None)
+                news_count += 1
+            active[symbol].setdefault("headline", dict(
+                title=item["headline"], url=item["url"],
+                source=item.get("source") or "Alpaca News", published=published.isoformat(),
+            ))
+    return list(active.values())
+
+
+async def market_activity():
+    try:
+        headers = alpaca_headers()
+    except ValueError:
+        return []
+    async with httpx.AsyncClient(timeout=6, headers=headers) as client:
+        async def get(path, params):
+            try:
+                response = await client.get("https://data.alpaca.markets/" + path, params=params)
+                response.raise_for_status()
+                return response.json()
+            except (ValueError, httpx.HTTPError):
+                return {}
+
+        movers, news = await asyncio.gather(
+            get("v1beta1/screener/stocks/movers", {"top": 15}),
+            get("v1beta1/news", {"limit": 30, "sort": "desc"}),
+        )
+        activity = discover_stocks(movers, news, datetime.now(timezone.utc))
+        headline_symbols = [item["ticker"] for item in activity if item["price"] is None]
+        snapshots = {}
+        feed = os.getenv("LEDGER_ALPACA_FEED", "iex")
+        if headline_symbols:
+            snapshots = await get("v2/stocks/snapshots", {
+                "symbols": ",".join(headline_symbols), "feed": feed,
+            })
+        stocks = []
+        for item in activity:
+            if item["price"] is None:
+                stock = snapshots.get(item["ticker"])
+                if not stock:
+                    continue
+                trade = stock.get("latestTrade") or {}
+                price = trade.get("p")
+                previous = (stock.get("prevDailyBar") or {}).get("c")
+                item.update(
+                    price=price, as_of=trade.get("t"), source=f"Alpaca {feed.upper()}",
+                    change_percent=(price / previous - 1) * 100 if price and previous else None,
+                )
+            stocks.append(item)
+        return stocks
+
+
 class MarketBrief:
     def __init__(self, quotes):
         self.quotes = quotes
@@ -86,21 +185,17 @@ class MarketBrief:
         self.cached = None
         self.expires = 0
         self.news = []
-        self.news_errors = []
         self.news_expires = 0
 
     async def get(self):
         async with self.lock:
             if self.cached and self.expires > time.monotonic():
                 return self.cached
-            prices, errors = await self.get_prices()
+            (prices, errors), activity = await asyncio.gather(self.get_prices(), market_activity())
             if self.news_expires <= time.monotonic():
                 feeds = await news_sources()
-                self.news_errors = []
                 for source, result in feeds.items():
-                    if isinstance(result, Exception) or not result:
-                        self.news_errors.append(f"{source} headlines unavailable.")
-                    else:
+                    if not isinstance(result, Exception) and result:
                         self.news = [
                             item for item in self.news if item["source"] != source
                         ] + result[:4]
@@ -110,7 +205,8 @@ class MarketBrief:
             self.cached = dict(
                 quotes=prices,
                 headlines=self.news[:10],
-                warnings=errors + self.news_errors,
+                warnings=errors,
+                activity=activity,
                 refresh_seconds=refresh,
             )
             self.expires = time.monotonic() + refresh
