@@ -13,6 +13,7 @@ LIMITS = {
     "chat": (15, 150),
     "forecast": (20, 200),
     "request": (500, 5000),
+    "MCP request": (100, 1000),
 }
 
 

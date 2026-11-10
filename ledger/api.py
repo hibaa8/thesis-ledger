@@ -45,13 +45,15 @@ def create_app(directory=None):
     chat = Chat(store, harness, quotes, market)
     forecast_lock = asyncio.Lock()
     mcp = create_mcp(store, harness, quotes, market)
+    public_mcp = create_mcp(quotes=quotes, market=market, market_only=True)
 
     @asynccontextmanager
     async def lifespan(app):
-        async with mcp.session_manager.run():
+        async with mcp.session_manager.run(), public_mcp.session_manager.run():
             yield
 
     mcp_app = mcp.streamable_http_app()
+    public_mcp_app = public_mcp.streamable_http_app()
     app = FastAPI(title="Thesis Ledger", lifespan=lifespan)
     allowed_hosts = os.getenv(
         "LEDGER_ALLOWED_HOSTS", "localhost,127.0.0.1,testserver"
@@ -68,6 +70,7 @@ def create_app(directory=None):
         token = os.getenv("LEDGER_API_TOKEN", "")
         path = request.url.path
         cookie = None
+        is_public_mcp = path == "/mcp/public/"
         request.state.visitor = None
         if path.startswith(("/api/", "/mcp")):
             authorized = token and hmac.compare_digest(
@@ -76,8 +79,10 @@ def create_app(directory=None):
             public_enabled = os.getenv("LEDGER_PUBLIC") == "1"
             if public_enabled and not token:
                 return JSONResponse({"detail": "Workspace access is not configured."}, status_code=503)
-            if token and not authorized:
-                if path.startswith("/api/") and public_enabled:
+            if is_public_mcp and not public_enabled:
+                return JSONResponse({"detail": "Not found"}, status_code=404)
+            if is_public_mcp or (token and not authorized):
+                if public_enabled and (is_public_mcp or path.startswith("/api/")):
                     request.state.visitor, cookie = visitor_cookie(
                         request.cookies.get(COOKIE, ""), token
                     )
@@ -92,7 +97,8 @@ def create_app(directory=None):
                 )
         try:
             if request.state.visitor:
-                await asyncio.to_thread(public_charge, request, "request")
+                category = "MCP request" if is_public_mcp else "request"
+                await asyncio.to_thread(public_charge, request, category)
             response = await call_next(request)
         except HTTPException as error:
             response = JSONResponse(
@@ -153,6 +159,7 @@ def create_app(directory=None):
             kronos_configured=bool(os.getenv("KRONOS_PATH")),
             model=os.getenv("LLM_MODEL") or "Deterministic demo",
             mcp_path="/mcp/",
+            public_mcp_path="/mcp/public/" if os.getenv("LEDGER_PUBLIC") == "1" else None,
         )
 
     @app.post("/api/research")
@@ -339,6 +346,7 @@ def create_app(directory=None):
             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
         )
 
+    app.mount("/mcp/public", public_mcp_app)
     app.mount("/mcp", mcp_app)
     app.mount("/static", StaticFiles(directory=WEB), name="static")
 

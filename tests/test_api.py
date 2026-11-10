@@ -189,3 +189,25 @@ def test_public_workspace_isolated_and_metered_across_app_restarts(tmp_path, mon
         assert limited.status_code == 429
         assert "daily research limit" in limited.json()["detail"]
         assert int(limited.headers["retry-after"]) > 0
+
+
+def test_public_mcp_exposes_only_market_tools(tmp_path, monkeypatch):
+    monkeypatch.setenv("LEDGER_PUBLIC", "1")
+    monkeypatch.setenv("LEDGER_API_TOKEN", "owner-test-token")
+    headers = {"Accept": "application/json, text/event-stream"}
+    request = {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
+    with TestClient(create_app(tmp_path), base_url="http://localhost:8000") as client:
+        public = client.post("/mcp/public/", json=request, headers=headers)
+        assert public.status_code == 200, public.text
+        tools = public.json()["result"]["tools"]
+        assert {tool["name"] for tool in tools} == {"market_brief", "latest_price"}
+        assert all(tool["annotations"]["readOnlyHint"] for tool in tools)
+        assert client.post("/mcp/", json=request, headers=headers).status_code == 401
+        owner = client.post(
+            "/mcp/",
+            json=request,
+            headers={**headers, "Authorization": "Bearer owner-test-token"},
+        )
+        assert "research_ticker" in {tool["name"] for tool in owner.json()["result"]["tools"]}
+        monkeypatch.delenv("LEDGER_PUBLIC")
+        assert client.post("/mcp/public/", json=request, headers=headers).status_code == 404
