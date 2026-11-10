@@ -46,7 +46,7 @@ I avoid majority voting: correlated LLM outputs are not independent statistical 
 
 ## Memory implementation versus the papers
 
-The SQLite ledger implements structured compression through the validated manager summary, a compact fixed-field record, and deduplication by originating run. Retrieval uses asset/mode/date filters plus lexical overlap ranking, capped at four memories. It does **not** implement SimpleMem's dense embeddings, BM25 multi-index fusion, or LLM intent planner. Structured reports reduce integration complexity but are not guaranteed “lossless.”
+The SQLite ledger implements structured compression through the validated manager summary, a compact fixed-field record, and deduplication by originating run. Retrieval uses asset/mode/date filters plus BM25 keyword ranking, capped at four memories. It does **not** implement SimpleMem's dense embeddings, multi-index fusion, or LLM intent planner. Structured reports reduce integration complexity but are not guaranteed “lossless.”
 
 ReHarness-inspired revisions are deliberately conservative: users can narrow applicability to the original source snapshot or retire a memory. Feedback is stored as unverified metadata and not inserted into the original claim. This does **not** implement automated source-grounded backward reflection, reward optimization, or outcome settlement. No learning-performance claim is made.
 
@@ -57,6 +57,8 @@ I stream OpenAI replies over the same authenticated API that serves the dashboar
 The price panel and MCP share a quote service. With Alpaca credentials, the browser refreshes the latest trade every 15 seconds while the chat page is open. With Alpha Vantage real-time entitlement it polls every 60 seconds. The standard Alpha Vantage key returns an end-of-day quote on demand. The interface shows the feed and observation time. Research snapshots still use completed daily bars, so an intraday quote never becomes a partial daily candle.
 
 The Forecast tab fetches daily bars and runs Kronos directly. It skips the analyst team and the extra requests for fundamentals and news.
+
+The landing page shows a market brief across major index ETFs and large-cap stocks. The dashboard, chat, and MCP share cached quotes and sourced CNBC Markets, Federal Reserve, and Bureau of Labor Statistics headlines. The first visit shows the last completed live NVDA report and runs a fresh daily report when needed. The Forecast tab loads a cached or newly computed Kronos result on entry.
 
 ## State and recovery
 

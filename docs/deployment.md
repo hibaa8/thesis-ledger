@@ -62,3 +62,9 @@ Open the service URL and enter the access token from the dashboard's **Access to
 The standard Docker image includes chat, prices, MCP, and bootstrap scenarios. The dedicated Kronos tab requires a custom image with the upstream checkout and inference dependencies, plus sufficient RAM and compute. I run Kronos locally for the free setup.
 
 Render's free service sleeps when idle and loses local SQLite data across restarts or redeploys. Use local hosting for durable free storage or attach persistent storage on a paid service. Model calls and provider data plans are billed separately from hosting. See [Render free service limits](https://render.com/docs/free).
+
+## ChatGPT connection
+
+For the existing token-protected deployment, a client such as Cursor can send the configured bearer header. ChatGPT's custom MCP connection uses OAuth for authenticated servers. Before connecting the full Thesis Ledger toolkit, configure OAuth 2.1 for the MCP endpoint. Keep the token-protected tools private until then.
+
+With an eligible workspace and permission to add custom MCP servers, open **Plugins → Add custom MCP server** in ChatGPT on the web. Use the hosted HTTPS URL ending in `/mcp/` or a Secure MCP Tunnel, select OAuth, and install the connection. Start a chat, type `@`, select the plugin, and ask for a market brief. See [ChatGPT connection steps](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt) and [MCP authentication](https://developers.openai.com/plugins/build/auth).
