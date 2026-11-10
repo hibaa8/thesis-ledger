@@ -984,7 +984,7 @@ dialog select {
 .market-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 28%); overflow: hidden; }
 .intraday-panel { min-width: 0; padding: 22px; }
 .instrument-head, .intraday-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.instrument-head h2 { font-size: clamp(1.65rem, 4vw, 2.55rem); margin: 3px 0 0; }
+.instrument-head #desk-symbol { display: block; font-size: clamp(1.65rem, 4vw, 2.55rem); margin: 3px 0 0; }
 #symbol-form label { display: block; font-size: .8rem; margin-bottom: 5px; }
 #symbol-form > div { display: flex; align-items: center; gap: 6px; }
 #symbol-search { width: 7ch; text-transform: uppercase; }
@@ -1015,4 +1015,13 @@ dialog select {
   .market-workspace, .news-grid { grid-template-columns: 1fr; }
   .market-workspace .watchlist { border-left: 0; border-top: 1px solid #354247; }
   .intraday-panel { padding: 14px; }
+}
+
+.nav-caption, footer { color: #8b9ba4; }
+aside nav button.active kbd { color: #a0c4b7; }
+.form-bottom > label[for="question"] { color: #b5c6c5; font-size: .8rem; }
+@media (max-width: 750px) {
+  body > aside nav:first-of-type { display: flex; flex-wrap: wrap; gap: 6px; }
+  body > aside nav:first-of-type button { min-height: 44px; white-space: nowrap; }
+  .segmented button { min-height: 44px; min-width: 44px; }
 }

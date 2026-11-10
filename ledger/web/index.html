@@ -100,7 +100,7 @@
         <div class="title-row">
           <div>
             <div class="eyebrow">U.S. EQUITIES</div>
-            <h1>Market desk</h1>
+            <h1>Market research desk</h1>
             <p class="subtitle">Follow the session, read company news, and research any U.S. stock.</p>
           </div>
           <button id="export" class="secondary" disabled>Export research</button>
@@ -108,7 +108,7 @@
         <section class="market-workspace panel" aria-label="Market desk">
           <div class="intraday-panel">
             <div class="instrument-head">
-              <div><span class="eyebrow">SELECTED SYMBOL</span><h2 id="desk-symbol">NVDA</h2></div>
+              <div><span class="eyebrow">SELECTED SYMBOL</span><strong id="desk-symbol">NVDA</strong></div>
               <form id="symbol-form">
                 <label for="symbol-search">Find a symbol</label>
                 <div><input id="symbol-search" value="NVDA" maxlength="10" required /><button class="secondary">View</button></div>
@@ -162,8 +162,7 @@
             </button>
           </div>
           <div class="form-bottom">
-            <span>↳</span
-            ><input
+            <label for="question">Research question</label><input
               id="question"
               aria-label="Research question"
               placeholder="What supports or challenges the investment thesis?"
