@@ -2,6 +2,8 @@
 
 I built Thesis Ledger to ask questions about U.S. stocks, compare bull and bear cases, and revisit investment theses as the evidence changes. The dashboard streams OpenAI responses, shows market moves and sourced headlines, and opens the same research workflow that Claude and Cursor can call over MCP.
 
+Currently being hosted: https://thesis-ledger.onrender.com/
+
 ![Thesis Ledger research dashboard](docs/assets/dashboard.jpg)
 
 ## Run locally
