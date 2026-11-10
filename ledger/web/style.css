@@ -597,12 +597,14 @@ textarea {
   margin-top: 12px;
 }
 .citation {
-  font: 9px monospace;
+  font-size: .78rem;
   color: #a9b7bc;
   border: 1px solid #344047;
   border-radius: 3px;
-  padding: 4px;
+  padding: 4px 6px;
+  overflow-wrap: anywhere;
 }
+a.citation, .evidence-item h3 a { color: #a5e8d0; text-decoration: underline; }
 .tabs {
   display: flex;
   gap: 27px;

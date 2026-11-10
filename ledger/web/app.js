@@ -170,12 +170,23 @@ $("research-form").onsubmit = async (e) => {
     $("run-button").textContent = "Run research ↗";
   }
 };
-function cites(ids) {
-  return (
-    '<div class="citations">' +
-    ids.map((id) => '<span class="citation">' + esc(id) + "</span>").join("") +
-    "</div>"
-  );
+function sourceTitle(evidence, className = "") {
+  const title = esc(evidence.title);
+  try {
+    const url = new URL(evidence.url);
+    if (["https:", "http:"].includes(url.protocol))
+      return `<a class="${className}" href="${esc(url.href)}" target="_blank" rel="noopener noreferrer">${title} ↗</a>`;
+  } catch {}
+  return `<span class="${className}">${title}</span>`;
+}
+
+function cites(ids, evidence) {
+  const sources = [...new Set(ids)]
+    .map((id) => evidence.find((item) => item.id === id))
+    .filter(Boolean);
+  return sources.length
+    ? '<div class="citations">' + sources.map((item) => sourceTitle(item, "citation")).join("") + '</div>'
+    : "";
 }
 function render() {
   $("empty").hidden = true;
@@ -234,7 +245,7 @@ function render() {
   $("analysts").innerHTML = Object.entries(names)
     .map(([key, name], i) => {
       const r = run.reports[key];
-      return `<article class="analyst"><div class="analyst-top"><span class="agent-icon">0${i + 1}</span><span class="stance ${esc(r.stance)}">${esc(r.stance)}</span></div><h3>${name}</h3><p>${esc(r.summary)}</p>${cites(r.evidence_ids)}</article>`;
+      return `<article class="analyst"><div class="analyst-top"><span class="agent-icon">0${i + 1}</span><span class="stance ${esc(r.stance)}">${esc(r.stance)}</span></div><h3>${name}</h3><p>${esc(r.summary)}</p>${cites(r.evidence_ids, run.snapshot.evidence)}</article>`;
     })
     .join("");
   $("call-count").textContent =
@@ -323,20 +334,15 @@ function details() {
         .filter(([k]) => k.startsWith("bull-") || k.startsWith("bear-"))
         .map(
           ([k, r]) =>
-            `<article class="debate-card ${k.startsWith("bear") ? "bear" : ""}"><span class="tiny">${esc(k.toUpperCase())}</span><p>${esc(r.summary)}</p>${cites(r.evidence_ids)}<p><strong>Invalidation:</strong> ${esc(r.invalidation)}</p></article>`,
+            `<article class="debate-card ${k.startsWith("bear") ? "bear" : ""}"><span class="tiny">${esc(k.toUpperCase())}</span><p>${esc(r.summary)}</p>${cites(r.evidence_ids, run.snapshot.evidence)}<p><strong>Invalidation:</strong> ${esc(r.invalidation)}</p></article>`,
         )
         .join("") +
       "</div>";
   } else if (tab === "evidence") {
     html = run.snapshot.evidence
-      .map((e) => {
-        let link = "";
-        try {
-          if (e.url && ["https:", "http:"].includes(new URL(e.url).protocol))
-            link = `<a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>`;
-        } catch {}
-        return `<div class="evidence-item"><span class="tiny">${esc(e.id)} · ${esc(e.published)}</span><h3>${esc(e.title)}</h3><p>${esc(e.text)}</p>${link}</div>`;
-      })
+      .map((e) =>
+        `<div class="evidence-item"><span class="tiny">${esc(e.source || e.kind)} · ${esc(e.published)}</span><h3>${sourceTitle(e)}</h3><p>${esc(e.text)}</p></div>`,
+      )
       .join("");
   } else if (tab === "trace") {
     html = run.trace
@@ -373,7 +379,11 @@ async function loadRuns() {
         )
         .join("")
     : '<div class="empty">No runs yet. Start at the research desk.</div>';
-  document.querySelectorAll("[data-open-run]").forEach(
+  bindRunButtons($("run-list"));
+}
+
+function bindRunButtons(container) {
+  container.querySelectorAll("[data-open-run]").forEach(
     (b) =>
       (b.onclick = async () => {
         b.disabled = true;
@@ -405,7 +415,7 @@ async function loadMemory() {
     ? memories
         .map(
           (m) =>
-            `<article class="panel memory-card"><div class="top"><strong>${esc(m.ticker)}</strong><span class="chip">${esc(m.mode)}</span><span class="tiny">${esc(m.as_of)}</span><button class="secondary" data-review="${esc(m.id)}">Review memory ↗</button></div><p>${esc(m.body.thesis)}</p><p><strong>Scope:</strong> ${esc(m.body.scope)}</p><p><strong>Invalidation:</strong> ${esc(m.body.invalidation)}</p>${cites(m.body.evidence_ids)}${m.revisions.map((r) => `<p class="revision">${esc(r.created.slice(0, 10))} · ${esc(r.scope)}<br>${esc(r.feedback)}</p>`).join("")}</article>`,
+            `<article class="panel memory-card"><div class="top"><strong>${esc(m.ticker)}</strong><span class="chip">${esc(m.mode)}</span><span class="tiny">${esc(m.as_of)}</span><button class="secondary" data-review="${esc(m.id)}">Review memory ↗</button></div><p>${esc(m.body.thesis)}</p><p><strong>Scope:</strong> ${esc(m.body.scope)}</p><p><strong>Invalidation:</strong> ${esc(m.body.invalidation)}</p><button class="secondary" data-open-run="${esc(m.run_id)}">Open source report ↗</button>${m.revisions.map((r) => `<p class="revision">${esc(r.created.slice(0, 10))} · ${esc(r.scope)}<br>${esc(r.feedback)}</p>`).join("")}</article>`,
         )
         .join("")
     : `<div class="empty">
@@ -418,6 +428,7 @@ async function loadMemory() {
       $("ticker").focus();
     };
   }
+  bindRunButtons($("memory-list"));
   document.querySelectorAll("[data-review]").forEach(
     (b) =>
       (b.onclick = () => {
