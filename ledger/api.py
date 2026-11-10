@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlparse
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from .harness import Harness
@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 from .chat import Chat
 from .data import snapshot
 from .forecast import forecast_bounded
+from .export import research_archive
 from .market import MarketBrief
 from .quotes import Quotes, quote_interval
 from .config import load_config
@@ -162,6 +163,22 @@ def create_app(directory=None):
     @app.get("/api/runs/{run_id}")
     def run(run_id: str):
         return store.get(run_id)
+
+    @app.get("/api/runs/{run_id}/export")
+    def export_run(run_id: str):
+        report = store.get(run_id)
+        if report["status"] != "complete":
+            raise HTTPException(409, "Complete the research run before exporting.")
+        req = ResearchRequest.model_validate(report["request"])
+        filename = f"thesis-ledger-{req.ticker}-{req.as_of}.zip"
+        return Response(
+            research_archive(report),
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Cache-Control": "no-store",
+            },
+        )
 
     @app.post("/api/runs/{run_id}/resume")
     async def resume(run_id: str):

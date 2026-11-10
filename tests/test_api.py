@@ -1,4 +1,7 @@
+import csv
 from datetime import date, timedelta
+from io import BytesIO, StringIO
+from zipfile import ZipFile
 
 import httpx
 from fastapi.testclient import TestClient
@@ -130,3 +133,29 @@ def test_forecast_uses_alpaca_daily_bars_when_alpha_vantage_is_throttled(
         assert result["snapshot"]["provider"] == "Alpaca IEX"
         assert result["snapshot"]["bars"][-1]["date"] == bars[-1]["date"]
         assert len(result["forecast"]["points"]) == 5
+
+
+def test_export_downloads_the_requested_completed_report(tmp_path, monkeypatch):
+    monkeypatch.setenv("LEDGER_API_TOKEN", "export-test-token")
+    headers = {"Authorization": "Bearer export-test-token"}
+    with TestClient(create_app(tmp_path)) as client:
+        run = client.post(
+            "/api/research",
+            headers=headers,
+            json={"ticker": "AAPL", "mode": "demo", "question": "=test question"},
+        ).json()
+        path = "/api/runs/" + run["id"] + "/export"
+        assert client.get(path).status_code == 401
+        response = client.get(path, headers=headers)
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/zip"
+        assert 'filename="thesis-ledger-AAPL-' in response.headers["content-disposition"]
+        with ZipFile(BytesIO(response.content)) as archive:
+            report = archive.read("report.md").decode()
+            assert f"Run ID: {run['id']}" in report
+            assert run["decision"]["summary"] in report
+            assert "## Risk" in report
+            forecast = list(csv.DictReader(StringIO(archive.read("forecast.csv").decode())))
+            assert len(forecast) == run["request"]["horizon"]
+            evidence = list(csv.DictReader(StringIO(archive.read("evidence.csv").decode())))
+            assert evidence[0]["id"] == "prices"
