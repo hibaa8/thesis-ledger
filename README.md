@@ -130,3 +130,12 @@ research ledger in Supabase. Research questions and completed reports are
 visible to all visitors. Chat transcripts stay scoped to each browser.
 Enabling Google sign-in switches new research to private account storage
 for signed-in users and temporary browser sessions for guests.
+
+### X post highlights
+
+Set `XAI_API_KEY` locally or as a Render secret to enable Grok X Search for
+current Deep Research runs. `LEDGER_XAI_MODEL` can override the default model.
+The sentiment analyst can use up to two cited X posts alongside Alpha Vantage
+news tone and FINRA short-sale activity. The Research Desk displays posts from
+the latest saved report for the selected ticker. Opening the desk does not
+trigger a paid search. Historical runs exclude X posts.

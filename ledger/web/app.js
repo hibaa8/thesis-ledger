@@ -162,6 +162,7 @@ $("research-form").onsubmit = async (e) => {
       status(result.error + " Open Research history to resume.", true);
     } else {
       run = result;
+      if (run.request.ticker === selectedTicker) renderXHighlights(run);
       render();
       status(run.snapshot.warnings.join(" "));
     }
@@ -820,6 +821,7 @@ async function selectTicker(value) {
   $("company-news-heading").textContent = ticker + " headlines";
   $("research-heading").textContent = "Research · " + ticker;
   $("company-news").textContent = "Loading headlines…";
+  renderXHighlights();
   $("forecast-chart").replaceChildren();
   document.querySelectorAll(".watch-row").forEach((row) =>
     row.setAttribute("aria-pressed", String(row.dataset.symbol === ticker)),
@@ -838,6 +840,7 @@ async function selectTicker(value) {
     if (version !== selectionVersion || $("run-button").disabled) return;
     if (saved) {
       run = saved;
+      renderXHighlights(saved);
       render();
       status("Saved live report · " + saved.request.as_of + " · " + saved.snapshot.warnings.join(" "));
     } else {
@@ -846,6 +849,16 @@ async function selectTicker(value) {
   } catch (err) {
     if (version === selectionVersion) status(err.message, true);
   }
+}
+
+function renderXHighlights(report) {
+  const posts = (report?.snapshot?.evidence || [])
+    .filter((item) => item.kind === "sentiment" && item.id.startsWith("x-post-"))
+    .slice(0, 2);
+  $("x-highlights").hidden = !posts.length;
+  $("x-posts").innerHTML = posts.map((post) =>
+    `<li>${sourceTitle(post)}<small>${esc(post.published)} · ${esc(post.text)}</small></li>`,
+  ).join("");
 }
 
 async function loadCompanyNews(ticker, version) {
