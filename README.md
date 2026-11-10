@@ -1,6 +1,6 @@
 # Thesis Ledger
 
-I built Thesis Ledger to ask questions about U.S. stocks, compare bull and bear cases, and revisit investment theses as the evidence changes. The dashboard streams OpenAI responses, displays the latest available market price, and opens the same research workflow that Claude and Cursor can call over MCP.
+I built Thesis Ledger to ask questions about U.S. stocks, compare bull and bear cases, and revisit investment theses as the evidence changes. The dashboard streams OpenAI responses, shows market moves and sourced headlines, and opens the same research workflow that Claude and Cursor can call over MCP.
 
 ![Thesis Ledger research dashboard](docs/assets/dashboard.jpg)
 
@@ -55,7 +55,7 @@ I keep forecasts separate until synthesis so analysts can form and challenge a t
 
 ## MCP and hosting
 
-The app exposes Streamable HTTP MCP at `/mcp/`. It also supports local stdio through `uv run thesis-ledger-mcp`. The tools cover the latest price, research, saved reports, recovery, thesis search, and thesis review. See the [deployment and MCP guide](docs/deployment.md) for client configuration and a free Render deployment. SQLite persists on local disk; Render's free filesystem is ephemeral.
+The app exposes Streamable HTTP MCP at `/mcp/`. It also supports local stdio through `uv run thesis-ledger-mcp`. The tools cover the market brief, latest price, research, saved reports, recovery, thesis search, and thesis review. See the [deployment and MCP guide](docs/deployment.md) for client configuration and a free Render deployment. SQLite persists on local disk; Render's free filesystem is ephemeral.
 
 ## Papers that inspired this project
 
