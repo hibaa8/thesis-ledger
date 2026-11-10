@@ -9,6 +9,7 @@ import exchange_calendars as xcals
 
 from .alpaca import company_news, daily_bars
 from .market import alpha_query, news_sources
+from .sec import sec_fundamentals
 
 CAL = xcals.get_calendar("XNYS")
 
@@ -217,16 +218,16 @@ async def snapshot(req, *, include_research_sources=True):
                                 )
                             )
                 except (ValueError, httpx.HTTPError):
-                    warnings.append(
-                        f"{kind.title()} unavailable; research must abstain on missing evidence."
-                    )
+                    if kind == "fundamentals":
+                        try:
+                            evidence.append(await sec_fundamentals(client, req.ticker, req.as_of))
+                        except (ValueError, httpx.HTTPError, KeyError, TypeError):
+                            warnings.append("Company fundamentals are unavailable from Alpha Vantage and SEC EDGAR.")
             company_news_checked = True
             try:
                 articles = await company_news(req.ticker)
             except (httpx.HTTPError, ValueError):
                 articles = []
-            if articles:
-                warnings = [w for w in warnings if not w.startswith("News unavailable")]
             known_urls = {item["url"] for item in evidence}
             for article in articles:
                 if article["url"] in known_urls:
@@ -247,7 +248,6 @@ async def snapshot(req, *, include_research_sources=True):
             public_news = await news_sources()
             for source, items in public_news.items():
                 if isinstance(items, Exception) or not items:
-                    warnings.append(f"{source} headlines unavailable.")
                     continue
                 for article in items[:3]:
                     evidence.append(
@@ -261,10 +261,14 @@ async def snapshot(req, *, include_research_sources=True):
                             text=f"{source} market headline. Use as general context; ticker relevance is unverified.",
                         )
                     )
+            if not any(item["kind"] == "news" for item in evidence):
+                warnings.append("No news evidence was available for this run.")
         elif include_research_sources:
-            warnings.append(
-                "Historical runs exclude current fundamentals and news to avoid look-ahead leakage."
-            )
+            try:
+                evidence.append(await sec_fundamentals(client, req.ticker, req.as_of))
+            except (ValueError, httpx.HTTPError, KeyError, TypeError):
+                warnings.append("No SEC fundamentals were available by the analysis date.")
+            warnings.append("Historical runs exclude current news to avoid look-ahead leakage.")
     if (req.as_of - date.fromisoformat(bars[-1]["date"])).days > 5:
         warnings.append(
             "STALE: latest market bar is more than five calendar days before the analysis date."
