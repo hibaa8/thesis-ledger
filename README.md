@@ -69,3 +69,32 @@ The hosted app exposes public market tools at `/mcp/public/`. The full toolkit i
 See [research notes](docs/research.md) for the adaptations and [evaluation notes](docs/evaluation.md) for validation limits. Run the local test suite with `uv run pytest -q`.
 
 The Market desk shows a curated watchlist of index ETFs and large-cap stocks. Select a row or enter another U.S. ticker to change the chart, company headlines, and report. With Alpaca configured, the chart shows five-minute candles for the most recent regular trading session with bars. Company headlines also feed into newly generated research.
+
+### Durable research history on Render
+
+Thesis Ledger can store research reports, thesis memories, and revisions in
+Supabase Postgres. The website and authenticated research MCP use the same
+backend. Public visitors keep separate records through their signed browser
+cookie. Keep `LEDGER_API_TOKEN` stable across deploys so existing cookies
+continue to resolve to the same workspace.
+
+1. Apply the SQL migration in `supabase/migrations/` through Supabase.
+2. Create a dedicated login in the Supabase SQL editor with a generated
+   password, then grant it membership in the migration's application role.
+
+   ```sql
+   CREATE ROLE thesis_ledger_render LOGIN PASSWORD '<generated-password>';
+   GRANT thesis_ledger_app TO thesis_ledger_render;
+   ```
+
+3. In the Supabase **Connect** panel, copy the **Session pooler** connection
+   URI. Use `thesis_ledger_render.<project-ref>` as its username, replace the
+   password with the URL-encoded generated password, and add
+   `?sslmode=require`. For certificate and hostname validation, supply the
+   Supabase CA certificate on the host and use `sslmode=verify-full`.
+4. Save the URI as the secret `LEDGER_DATABASE_URL` in the Render service's
+   **Environment** settings and redeploy.
+
+With no database URL, the app uses SQLite. Existing SQLite research records
+stay in their original database. Chat transcripts, forecast cache, and daily
+usage counters continue to use the host's local storage.
