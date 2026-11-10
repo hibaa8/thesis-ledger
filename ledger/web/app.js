@@ -98,7 +98,9 @@ async function page(name) {
     if (name === "research") {
       refreshMarket();
       refreshQuote("desk-quote", "ticker", "research");
+      refreshIntraday(selectedTicker);
     }
+    if (name !== "research") clearTimeout(intradayTimer);
     if (name === "forecast" && !$("forecast-chart").childElementCount
         && !$("forecast-submit").disabled) $("forecast-form").requestSubmit();
     if (name === "memory") await loadMemory();
@@ -115,7 +117,7 @@ document
 $("sample").onclick = () => {
   $("mode").value = "demo";
   $("engine").value = "bootstrap";
-  $("ticker").value = "NVDA";
+  $("ticker").value = selectedTicker;
   $("research-form").requestSubmit();
 };
 $("mode").onchange = () =>
@@ -147,6 +149,7 @@ $("research-form").onsubmit = async (e) => {
       method: "POST",
       body: JSON.stringify(request),
     });
+    if (request.ticker !== selectedTicker) return;
     if (result.status === "failed") {
       status(result.error + " Open Research history to resume.", true);
     } else {
@@ -446,35 +449,14 @@ $("export").onclick = () => {
 };
 api("/config")
   .then(async (c) => {
+    liveReady = c.live_ready;
+    alpacaReady = c.alpaca_ready;
     if (!c.live_ready)
       $("mode").options[1].textContent = "Live (setup required)";
     if (!c.kronos_configured)
       $("engine").options[1].textContent = "Kronos (setup required)";
     refreshMarket();
-    refreshQuote("desk-quote", "ticker", "research");
-    const saved = await api("/dashboard");
-    if (run || $("run-button").disabled) return;
-    if (saved) {
-      run = saved;
-      render();
-      status("Saved live report · " + saved.request.as_of + " · " + saved.snapshot.warnings.join(" "));
-    }
-    if (saved?.request.as_of === localDate) return;
-    if (!c.live_ready) {
-      if (!saved) status("Configure OpenAI and Alpha Vantage to load live analysis.", true);
-      return;
-    }
-    $("run-button").disabled = true;
-    status(saved ? "Refreshing the saved live report…" : "Running the analyst team for NVDA…");
-    try {
-      const fresh = await api("/dashboard", { method: "POST" });
-      if (fresh.status !== "complete") throw Error(fresh.error || "Live research did not finish.");
-      run = fresh;
-      render();
-      status("Live report · " + fresh.request.as_of + " · " + fresh.snapshot.warnings.join(" "));
-    } finally {
-      $("run-button").disabled = false;
-    }
+    await selectTicker(selectedTicker, true);
   })
   .catch((e) => status(e.message, true));
 
@@ -539,7 +521,7 @@ async function refreshQuote(card = "quote-card", input = "chat-ticker", activePa
 
 $("refresh-quote").onclick = () => refreshQuote();
 $("chat-ticker").onchange = () => refreshQuote();
-$("ticker").onchange = () => refreshQuote("desk-quote", "ticker", "research");
+$("ticker").onchange = () => selectTicker($("ticker").value);
 $("new-chat").onclick = () => {
   chatSession = newChatId();
   $("chat-messages").replaceChildren();
@@ -645,18 +627,23 @@ async function refreshMarket() {
     const brief = await api("/market");
     $("market-quotes").replaceChildren();
     for (const q of brief.quotes) {
-      const card = document.createElement("div");
-      card.className = "market-quote";
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "watch-row";
+      row.dataset.symbol = q.ticker;
+      row.setAttribute("aria-pressed", String(q.ticker === selectedTicker));
+      row.title = q.source + " · " + q.as_of;
       const symbol = document.createElement("strong");
-      symbol.textContent = q.ticker + "  $" + fmt(q.price);
+      symbol.textContent = q.ticker;
+      const price = document.createElement("span");
+      price.textContent = "$" + fmt(q.price);
       const change = document.createElement("span");
       change.className = q.change_percent > 0 ? "market-up" : q.change_percent < 0 ? "market-down" : "";
-      change.textContent = q.change_percent == null ? "Change unavailable" :
-        (q.change_percent > 0 ? "+" : "") + fmt(q.change_percent) + "% vs prior close";
-      const meta = document.createElement("small");
-      meta.textContent = q.source + " · " + q.freshness + " · " + q.as_of;
-      card.append(symbol, change, meta);
-      $("market-quotes").append(card);
+      change.textContent = q.change_percent == null ? "—" :
+        (q.change_percent > 0 ? "+" : "") + fmt(q.change_percent) + "%";
+      row.append(symbol, price, change);
+      row.onclick = () => selectTicker(q.ticker);
+      $("market-quotes").append(row);
     }
     const measured = brief.quotes.filter(q => q.change_percent != null);
     const rising = measured.filter(q => q.change_percent > 0).length;
@@ -687,4 +674,151 @@ async function refreshMarket() {
   } catch (err) {
     $("market-warning").textContent = err.message;
   }
+}
+
+let selectedTicker = "NVDA";
+let selectionVersion = 0;
+let intradayTimer;
+let chartTicker = "";
+let liveReady = false;
+let alpacaReady = false;
+
+$("symbol-form").onsubmit = (event) => {
+  event.preventDefault();
+  selectTicker($("symbol-search").value);
+};
+
+async function selectTicker(value, autoResearch = false) {
+  const ticker = value.trim().toUpperCase();
+  if (!/^[A-Z][A-Z0-9.\-]{0,9}$/.test(ticker)) {
+    $("intraday-status").textContent = "Enter a valid U.S. ticker.";
+    return;
+  }
+  const version = ++selectionVersion;
+  selectedTicker = ticker;
+  for (const id of ["ticker", "symbol-search", "forecast-ticker", "chat-ticker"]) $(id).value = ticker;
+  $("desk-symbol").textContent = ticker;
+  $("company-news-heading").textContent = ticker + " headlines";
+  $("research-heading").textContent = "Research · " + ticker;
+  $("company-news").textContent = "Loading headlines…";
+  $("forecast-chart").replaceChildren();
+  document.querySelectorAll(".watch-row").forEach((row) =>
+    row.setAttribute("aria-pressed", String(row.dataset.symbol === ticker)),
+  );
+  run = null;
+  $("results").hidden = true;
+  $("empty").hidden = true;
+  $("export").disabled = true;
+  refreshQuote("desk-quote", "ticker", "research");
+  refreshIntraday(ticker);
+  loadCompanyNews(ticker, version);
+  status("Looking for saved " + ticker + " research…");
+  try {
+    const path = "/dashboard?ticker=" + encodeURIComponent(ticker);
+    const saved = await api(path);
+    if (version !== selectionVersion || $("run-button").disabled) return;
+    if (saved) {
+      run = saved;
+      render();
+      status("Saved live report · " + saved.request.as_of + " · " + saved.snapshot.warnings.join(" "));
+    } else {
+      status(liveReady ? "Select Run research to generate a " + ticker + " report." : "Connect the research providers to run analysis.");
+    }
+    const current = saved?.request.as_of === localDate &&
+      (!alpacaReady || saved.snapshot.company_news_checked);
+    if (!autoResearch || !liveReady || current) return;
+    $("run-button").disabled = true;
+    status("Running the analyst team for " + ticker + "…");
+    try {
+      const fresh = await api(path, { method: "POST" });
+      if (version !== selectionVersion) return;
+      if (fresh.status !== "complete") throw Error(fresh.error || "Live research did not finish.");
+      run = fresh;
+      render();
+      status("Live report · " + fresh.request.as_of + " · " + fresh.snapshot.warnings.join(" "));
+    } finally {
+      $("run-button").disabled = false;
+    }
+  } catch (err) {
+    if (version === selectionVersion) status(err.message, true);
+  }
+}
+
+async function loadCompanyNews(ticker, version) {
+  const list = $("company-news");
+  try {
+    const articles = await api("/news/" + encodeURIComponent(ticker));
+    if (version !== selectionVersion) return;
+    list.replaceChildren();
+    for (const article of articles.slice(0, 5)) {
+      const item = document.createElement("li");
+      const link = document.createElement("a");
+      link.href = article.url;
+      link.rel = "noopener noreferrer";
+      link.target = "_blank";
+      link.textContent = article.title;
+      const meta = document.createElement("small");
+      meta.textContent = article.source + " · " + new Date(article.published).toLocaleString();
+      item.append(link, meta);
+      list.append(item);
+    }
+    if (!articles.length) list.textContent = "Alpaca returned no headlines for " + ticker + ".";
+  } catch (err) {
+    if (version === selectionVersion) list.textContent = err.message;
+  }
+}
+
+async function refreshIntraday(ticker) {
+  clearTimeout(intradayTimer);
+  const version = selectionVersion;
+  if (chartTicker !== ticker) {
+    chartTicker = ticker;
+    $("intraday-chart").replaceChildren();
+    $("intraday-status").textContent = "Loading " + ticker + " session…";
+  }
+  try {
+    const result = await api("/intraday/" + encodeURIComponent(ticker));
+    if (version !== selectionVersion) return;
+    drawCandles(result);
+    $("intraday-status").textContent = result.session + " · Regular session ET · Alpaca " + result.feed;
+  } catch (err) {
+    if (version !== selectionVersion) return;
+    $("intraday-status").textContent = err.message;
+  }
+  if (version === selectionVersion && $("research").classList.contains("active"))
+    intradayTimer = setTimeout(() => refreshIntraday(ticker), 60_000);
+}
+
+function drawCandles({ bars, ticker, open, close }) {
+  const w = 720, h = 285, left = 10, right = 66, top = 12, bottom = 30;
+  const minimum = Math.min(...bars.map(bar => bar.l));
+  const maximum = Math.max(...bars.map(bar => bar.h));
+  const pad = Math.max((maximum - minimum) * 0.07, 0.01);
+  const lo = minimum - pad, hi = maximum + pad;
+  const start = Date.parse(open);
+  const elapsed = Math.min(Date.parse(close), Date.parse(bars.at(-1).t) + 300_000) - start;
+  const span = Math.max(300_000, elapsed);
+  const x = time => left + (time - start) / span * (w - left - right);
+  const y = price => top + (hi - price) / (hi - lo) * (h - top - bottom);
+  const body = Math.min(14, (w - left - right) * 0.68 * 300_000 / span);
+  const labelTime = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York", hour: "numeric", minute: "2-digit",
+  });
+  let svg = `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(ticker)} five-minute candlestick chart">`;
+  for (let i = 0; i <= 4; i++) {
+    const price = lo + (hi - lo) * i / 4;
+    svg += `<line class="candle-grid" x1="${left}" x2="${w-right}" y1="${y(price)}" y2="${y(price)}"/><text x="${w-right+10}" y="${y(price)+4}">${fmt(price)}</text>`;
+  }
+  for (let i = 0; i <= 4; i++) {
+    const timestamp = start + span * i / 4;
+    svg += `<text x="${x(timestamp)}" y="${h-7}" text-anchor="${i === 0 ? "start" : "middle"}">${labelTime.format(timestamp)}</text>`;
+  }
+  for (const bar of bars) {
+    const cx = x(Date.parse(bar.t) + 150_000);
+    const cls = bar.c >= bar.o ? "candle-up" : "candle-down";
+    svg += `<g class="${cls}"><title>${labelTime.format(Date.parse(bar.t))} ET · Open ${fmt(bar.o)} · High ${fmt(bar.h)} · Low ${fmt(bar.l)} · Close ${fmt(bar.c)}</title>
+      <line x1="${cx}" x2="${cx}" y1="${y(bar.h)}" y2="${y(bar.l)}"/>
+      <rect x="${cx-body/2}" y="${Math.min(y(bar.o), y(bar.c))}" width="${body}" height="${Math.max(1, Math.abs(y(bar.o)-y(bar.c)))}"/></g>`;
+  }
+  $("intraday-chart").innerHTML = svg + "</svg>";
 }

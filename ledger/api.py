@@ -25,6 +25,7 @@ from .forecast import forecast_bounded
 from .market import MarketBrief
 from .quotes import Quotes, quote_interval
 from .config import load_config
+from .alpaca import company_news, intraday
 
 
 class ChatRequest(BaseModel):
@@ -50,11 +51,14 @@ def create_app(directory=None):
 
     mcp_app = mcp.streamable_http_app()
     app = FastAPI(title="Thesis Ledger", lifespan=lifespan)
+    allowed_hosts = os.getenv(
+        "LEDGER_ALLOWED_HOSTS", "localhost,127.0.0.1,testserver"
+    ).split(",")
+    if render_host := os.getenv("RENDER_EXTERNAL_HOSTNAME"):
+        allowed_hosts.append(render_host)
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=os.getenv(
-            "LEDGER_ALLOWED_HOSTS", "localhost,127.0.0.1,testserver"
-        ).split(","),
+        allowed_hosts=allowed_hosts,
     )
 
     @app.middleware("http")
@@ -87,9 +91,13 @@ def create_app(directory=None):
     def health():
         return {"status": "ok", "version": "0.1.0"}
 
+    def alpaca_ready():
+        return bool(os.getenv("APCA_API_KEY_ID") and os.getenv("APCA_API_SECRET_KEY"))
+
     @app.get("/api/config")
     def config():
         return dict(
+            alpaca_ready=alpaca_ready(),
             live_ready=bool(
                 os.getenv("LLM_API_KEY")
                 and os.getenv("LLM_MODEL")
@@ -115,14 +123,21 @@ def create_app(directory=None):
         return await market.get()
 
     @app.get("/api/dashboard")
-    def dashboard():
-        return store.latest_live_report("NVDA")
+    def dashboard(ticker: str = "NVDA"):
+        return store.latest_live_report(ResearchRequest(ticker=ticker.upper()).ticker)
 
     @app.post("/api/dashboard")
-    async def refresh_dashboard():
-        req = ResearchRequest(ticker="NVDA", mode="live")
+    async def refresh_dashboard(ticker: str = "NVDA"):
+        req = ResearchRequest(ticker=ticker.upper(), mode="live")
         saved = store.latest_live_report(req.ticker)
-        if saved and saved["request"]["as_of"] == req.as_of.isoformat():
+        if (
+            saved
+            and saved["request"]["as_of"] == req.as_of.isoformat()
+            and (
+                not alpaca_ready()
+                or saved.get("snapshot", {}).get("company_news_checked")
+            )
+        ):
             return saved
         if harness.lock.locked():
             raise HTTPException(409, "Research is already running.")
@@ -194,6 +209,27 @@ def create_app(directory=None):
             }
             store.save_forecast(key, payload)
         return payload
+
+    @app.get("/api/intraday/{ticker}")
+    async def chart_data(ticker: str):
+        try:
+            return await intraday(ResearchRequest(ticker=ticker.upper()).ticker)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from None
+        except httpx.HTTPError:
+            raise HTTPException(
+                503,
+                "Alpaca could not return intraday bars. Check the feed entitlement.",
+            ) from None
+
+    @app.get("/api/news/{ticker}")
+    async def ticker_news(ticker: str):
+        try:
+            return await company_news(ResearchRequest(ticker=ticker.upper()).ticker)
+        except (ValueError, httpx.HTTPError):
+            raise HTTPException(
+                503, "Company headlines are currently unavailable from Alpaca."
+            ) from None
 
     @app.get("/api/quote/{ticker}")
     async def quote(ticker: str):

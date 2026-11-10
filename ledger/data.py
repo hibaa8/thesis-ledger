@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import exchange_calendars as xcals
 
+from .alpaca import company_news
 from .market import alpha_query, news_sources
 
 CAL = xcals.get_calendar("XNYS")
@@ -142,6 +143,7 @@ async def snapshot(req, *, include_research_sources=True):
                 text=f"{len(bars)} daily bars through {bars[-1]['date']}. Unadjusted: splits can distort signals.",
             )
         ]
+        company_news_checked = False
         warnings = [
             "Daily bars are unadjusted. Corporate actions can distort forecasts.",
             "Social sentiment is unavailable; news is not a proxy for social sentiment.",
@@ -208,6 +210,29 @@ async def snapshot(req, *, include_research_sources=True):
                     warnings.append(
                         f"{kind.title()} unavailable; research must abstain on missing evidence."
                     )
+            company_news_checked = True
+            try:
+                articles = await company_news(req.ticker)
+            except (httpx.HTTPError, ValueError):
+                articles = []
+            if articles:
+                warnings = [w for w in warnings if not w.startswith("News unavailable")]
+            known_urls = {item["url"] for item in evidence}
+            for article in articles:
+                if article["url"] in known_urls:
+                    continue
+                known_urls.add(article["url"])
+                evidence.append(
+                    dict(
+                        id=f"company-news-{len(evidence)}",
+                        kind="news",
+                        title=article["title"],
+                        url=article["url"],
+                        published=article["published"],
+                        text=article["summary"]
+                        or f"Headline from {article['source']}.",
+                    )
+                )
             public_news = await news_sources()
             for source, items in public_news.items():
                 if isinstance(items, Exception) or not items:
@@ -236,6 +261,7 @@ async def snapshot(req, *, include_research_sources=True):
         bars=bars,
         evidence=evidence,
         provider="Alpha Vantage",
+        company_news_checked=company_news_checked,
         retrieved_at=datetime.now(timezone.utc).isoformat(),
         warnings=warnings,
     )

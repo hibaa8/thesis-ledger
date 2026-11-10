@@ -15,6 +15,8 @@ def create_mcp(store=None, harness=None, quotes=None, market=None):
     quotes = quotes or Quotes()
     market = market or MarketBrief(quotes)
     hosts = os.getenv("LEDGER_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    if render_host := os.getenv("RENDER_EXTERNAL_HOSTNAME"):
+        hosts.append(render_host)
     security = TransportSecuritySettings(
         allowed_hosts=[v for h in hosts for v in [h, h + ":*"]],
         allowed_origins=[

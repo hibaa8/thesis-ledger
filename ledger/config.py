@@ -13,6 +13,8 @@ def load_config():
         ("LLM_API_KEY", "OPENAI_KEY"),
         ("LLM_API_KEY", "OPENAI_API_KEY"),
         ("ALPHAVANTAGE_API_KEY", "ALPHA_VANTAGE"),
+        ("APCA_API_KEY_ID", "ALPACA_key"),
+        ("APCA_API_SECRET_KEY", "ALPACA_secret"),
     ):
         if not os.getenv(canonical) and os.getenv(alias):
             os.environ[canonical] = os.environ[alias]

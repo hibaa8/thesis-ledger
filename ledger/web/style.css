@@ -980,3 +980,39 @@ dialog select {
 .market-down { color: #ff9b9b; }
 .market-news { display: grid; gap: 8px; padding-left: 20px; }
 .market-news a { color: #a5e8d0; }
+
+.market-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 28%); overflow: hidden; }
+.intraday-panel { min-width: 0; padding: 22px; }
+.instrument-head, .intraday-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.instrument-head h2 { font-size: clamp(1.65rem, 4vw, 2.55rem); margin: 3px 0 0; }
+#symbol-form label { display: block; font-size: .8rem; margin-bottom: 5px; }
+#symbol-form > div { display: flex; align-items: center; gap: 6px; }
+#symbol-search { width: 7ch; text-transform: uppercase; }
+#desk-quote { margin: 14px 0; font-size: .86rem; color: #b5c6c5; }
+.intraday-meta { margin: 14px 0 6px; font-size: .82rem; flex-wrap: wrap; }
+#intraday-status { color: #a0b2b1; }
+#intraday-chart { min-height: 160px; }
+#intraday-chart svg { display: block; width: 100%; height: auto; }
+#intraday-chart text { fill: #adbcbd; font: 12px system-ui, sans-serif; }
+.candle-grid { stroke: #2e3c43; }
+.candle-up { fill: #76dec2; stroke: #76dec2; }
+.candle-down { fill: #ff9189; stroke: #ff9189; }
+.market-workspace .watchlist { position: static; width: auto; padding: 0; border: 0; border-left: 1px solid #354247; background: #151e24; }
+.watchlist-head { padding: 16px 14px 8px; }
+.watchlist-head p { color: #aab9ba; font-size: .78rem; margin: 5px 0; }
+.watchlist-labels, .watch-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; text-align: right; align-items: center; }
+.watchlist-labels > :first-child, .watch-row > :first-child { text-align: left; }
+.watchlist-labels { padding: 6px 14px; font-size: .73rem; color: #9cadb1; }
+.watchlist .market-quotes { display: block; }
+.watch-row { width: 100%; min-height: 44px; padding: 5px 14px; color: inherit; background: transparent; border: 0; border-top: 1px solid #2a373d; border-radius: 0; cursor: pointer; font: inherit; font-size: .81rem; font-variant-numeric: tabular-nums; }
+.watch-row:hover, .watch-row[aria-pressed="true"] { background: #243b3c; }
+.watchlist #market-warning { padding: 0 14px; }
+.news-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin: 26px 0; }
+.news-grid section { min-width: 0; }
+.news-grid .market-news { list-style: none; padding: 0; }
+.news-grid li { border-top: 1px solid #354247; padding: 9px 0; }
+@media (max-width: 770px) {
+  .market-workspace, .news-grid { grid-template-columns: 1fr; }
+  .market-workspace .watchlist { border-left: 0; border-top: 1px solid #354247; }
+  .intraday-panel { padding: 14px; }
+}
