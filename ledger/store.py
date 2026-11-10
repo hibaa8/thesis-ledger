@@ -26,6 +26,9 @@ class Store:
             CREATE TABLE IF NOT EXISTS chat_messages(
                 id INTEGER PRIMARY KEY, session TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL);
             CREATE INDEX IF NOT EXISTS chat_session ON chat_messages(session, id);
+            CREATE TABLE IF NOT EXISTS public_usage(
+                day TEXT, scope TEXT, category TEXT, used INTEGER,
+                PRIMARY KEY(day, scope, category));
             CREATE TABLE IF NOT EXISTS forecasts(cache_key TEXT PRIMARY KEY, state TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY, created TEXT, state TEXT);
             CREATE TABLE IF NOT EXISTS memories(id TEXT PRIMARY KEY, run_id TEXT UNIQUE, ticker TEXT,

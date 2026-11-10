@@ -23,6 +23,7 @@ from .chat import Chat
 from .data import snapshot
 from .forecast import forecast_bounded
 from .export import research_archive
+from .public import COOKIE, charge, visitor_cookie
 from .market import MarketBrief
 from .quotes import Quotes, quote_interval
 from .config import load_config
@@ -65,24 +66,66 @@ def create_app(directory=None):
     @app.middleware("http")
     async def access(request: Request, call_next):
         token = os.getenv("LEDGER_API_TOKEN", "")
-        if request.url.path.startswith(("/api/", "/mcp")):
-            if token and not hmac.compare_digest(
+        path = request.url.path
+        cookie = None
+        request.state.visitor = None
+        if path.startswith(("/api/", "/mcp")):
+            authorized = token and hmac.compare_digest(
                 request.headers.get("authorization", ""), f"Bearer {token}"
-            ):
-                return JSONResponse(
-                    {"detail": "Valid bearer token required"}, status_code=401
-                )
+            )
+            public_enabled = os.getenv("LEDGER_PUBLIC") == "1"
+            if public_enabled and not token:
+                return JSONResponse({"detail": "Workspace access is not configured."}, status_code=503)
+            if token and not authorized:
+                if path.startswith("/api/") and public_enabled:
+                    request.state.visitor, cookie = visitor_cookie(
+                        request.cookies.get(COOKIE, ""), token
+                    )
+                else:
+                    return JSONResponse(
+                        {"detail": "Valid bearer token required"}, status_code=401
+                    )
             origin = request.headers.get("origin")
             if origin and urlparse(origin).netloc != request.headers.get("host"):
                 return JSONResponse(
                     {"detail": "Cross-origin access denied"}, status_code=403
                 )
-        response = await call_next(request)
+        try:
+            if request.state.visitor:
+                await asyncio.to_thread(public_charge, request, "request")
+            response = await call_next(request)
+        except HTTPException as error:
+            response = JSONResponse(
+                {"detail": error.detail}, status_code=error.status_code, headers=error.headers
+            )
+        if request.state.visitor:
+            response.headers["Cache-Control"] = "private, no-store"
+        if cookie:
+            response.set_cookie(
+                COOKIE, cookie, httponly=True, samesite="lax",
+                secure=request.url.scheme == "https" or bool(os.getenv("RENDER")),
+                max_age=365 * 86400,
+            )
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'"
         )
         return response
+
+    def visitor_store(request):
+        visitor = request.state.visitor
+        return Store(store.path.parent / "visitors" / visitor) if visitor else store
+
+    def visitor_harness(request):
+        if not request.state.visitor:
+            return harness
+        scoped = Harness(visitor_store(request))
+        scoped.lock = harness.lock
+        return scoped
+
+    def public_charge(request, category):
+        if visitor := request.state.visitor:
+            charge(store, visitor, category)
 
     @app.exception_handler(KeyError)
     async def missing(request, exc):
@@ -96,8 +139,9 @@ def create_app(directory=None):
         return bool(os.getenv("APCA_API_KEY_ID") and os.getenv("APCA_API_SECRET_KEY"))
 
     @app.get("/api/config")
-    def config():
+    def config(request: Request):
         return dict(
+            public_visitor=bool(request.state.visitor),
             alpaca_ready=alpaca_ready(),
             live_ready=bool(
                 os.getenv("LLM_API_KEY")
@@ -112,25 +156,26 @@ def create_app(directory=None):
         )
 
     @app.post("/api/research")
-    async def research(req: ResearchRequest):
+    async def research(req: ResearchRequest, request: Request):
         if harness.lock.locked():
             raise HTTPException(
                 409, "Research already running. Wait for the current run to finish."
             )
-        return await harness.run(req)
+        public_charge(request, "research")
+        return await visitor_harness(request).run(req)
 
     @app.get("/api/market")
     async def market_overview():
         return await market.get()
 
     @app.get("/api/dashboard")
-    def dashboard(ticker: str = "NVDA"):
-        return store.latest_live_report(ResearchRequest(ticker=ticker.upper()).ticker)
+    def dashboard(request: Request, ticker: str = "NVDA"):
+        return visitor_store(request).latest_live_report(ResearchRequest(ticker=ticker.upper()).ticker)
 
     @app.post("/api/dashboard")
-    async def refresh_dashboard(ticker: str = "NVDA"):
+    async def refresh_dashboard(request: Request, ticker: str = "NVDA"):
         req = ResearchRequest(ticker=ticker.upper(), mode="live")
-        saved = store.latest_live_report(req.ticker)
+        saved = visitor_store(request).latest_live_report(req.ticker)
         if (
             saved
             and saved["request"]["as_of"] == req.as_of.isoformat()
@@ -142,14 +187,15 @@ def create_app(directory=None):
             return saved
         if harness.lock.locked():
             raise HTTPException(409, "Research is already running.")
-        if not config()["live_ready"]:
+        if not config(request)["live_ready"]:
             raise HTTPException(
                 503, "Configure OpenAI and either Alpha Vantage or Alpaca to load live research."
             )
-        return await harness.run(req)
+        public_charge(request, "research")
+        return await visitor_harness(request).run(req)
 
     @app.get("/api/runs")
-    def runs():
+    def runs(request: Request):
         return [
             dict(
                 id=r["id"],
@@ -157,16 +203,16 @@ def create_app(directory=None):
                 status=r["status"],
                 request=r["request"],
             )
-            for r in store.runs()
+            for r in visitor_store(request).runs()
         ]
 
     @app.get("/api/runs/{run_id}")
-    def run(run_id: str):
-        return store.get(run_id)
+    def run(run_id: str, request: Request):
+        return visitor_store(request).get(run_id)
 
     @app.get("/api/runs/{run_id}/export")
-    def export_run(run_id: str):
-        report = store.get(run_id)
+    def export_run(run_id: str, request: Request):
+        report = visitor_store(request).get(run_id)
         if report["status"] != "complete":
             raise HTTPException(409, "Complete the research run before exporting.")
         req = ResearchRequest.model_validate(report["request"])
@@ -181,25 +227,32 @@ def create_app(directory=None):
         )
 
     @app.post("/api/runs/{run_id}/resume")
-    async def resume(run_id: str):
+    async def resume(run_id: str, request: Request):
         if harness.lock.locked():
             raise HTTPException(409, "Research already running")
-        return await harness.run(resume_id=run_id)
+        scoped = visitor_harness(request)
+        scoped.store.get(run_id)
+        public_charge(request, "research")
+        return await scoped.run(resume_id=run_id)
 
     @app.get("/api/memories")
-    def memories():
-        return store.memories()
+    def memories(request: Request):
+        return visitor_store(request).memories()
 
     @app.post("/api/memories/review")
-    def review(req: ReviewRequest):
-        return store.revise(req.memory_id, req.feedback, req.scope)
+    def review(req: ReviewRequest, request: Request):
+        return visitor_store(request).revise(req.memory_id, req.feedback, req.scope)
 
     @app.post("/api/forecast")
-    async def forecast(req: ResearchRequest):
+    async def forecast(req: ResearchRequest, request: Request):
         cache_model = "kronos-small" if req.forecast == "kronos" else "bootstrap"
         key = f"{cache_model}:{req.mode}:{req.ticker}:{req.horizon}:{req.as_of}"
         cached = store.cached_forecast(key)
         if cached is not None:
+            if request.state.visitor:
+                cached["request"] = {
+                    key: cached["request"][key] for key in ("ticker", "as_of", "horizon", "mode", "forecast")
+                }
             return cached
         if req.forecast == "kronos" and not os.getenv("KRONOS_PATH"):
             raise HTTPException(
@@ -207,6 +260,7 @@ def create_app(directory=None):
             )
         if forecast_lock.locked():
             raise HTTPException(409, "A forecast is already running.")
+        public_charge(request, "forecast")
         async with forecast_lock:
             try:
                 market = await snapshot(req, include_research_sources=False)
@@ -223,7 +277,9 @@ def create_app(directory=None):
             payload = {
                 "forecast": result,
                 "snapshot": market,
-                "request": req.model_dump(mode="json"),
+                "request": req.model_dump(
+                    mode="json", include={"ticker", "as_of", "horizon", "mode", "forecast"}
+                ),
             }
             store.save_forecast(key, payload)
         return payload
@@ -257,17 +313,28 @@ def create_app(directory=None):
             raise HTTPException(503, str(exc)) from None
 
     @app.get("/api/chat/{session}")
-    def history(session: str):
-        return store.chat_history(session)
+    def history(session: str, request: Request):
+        return visitor_store(request).chat_history(session)
 
     @app.post("/api/chat")
-    async def chat_turn(req: ChatRequest):
+    async def chat_turn(req: ChatRequest, request: Request):
         if not os.getenv("LLM_API_KEY"):
             raise HTTPException(503, "Chat requires a configured OpenAI API key.")
         if not req.message.strip():
             raise HTTPException(422, "Enter a message.")
+        if chat.lock.locked():
+            raise HTTPException(409, "Another chat turn is running. Try again shortly.")
+        public_charge(request, "chat")
+        scoped_chat = chat
+        if request.state.visitor:
+            scoped_harness = visitor_harness(request)
+            scoped_chat = Chat(
+                scoped_harness.store, scoped_harness, quotes, market,
+                charge_research=lambda: public_charge(request, "research"),
+            )
+            scoped_chat.lock = chat.lock
         return StreamingResponse(
-            chat.stream(req.session, req.message.strip(), req.ticker),
+            scoped_chat.stream(req.session, req.message.strip(), req.ticker),
             media_type="application/x-ndjson",
             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
         )

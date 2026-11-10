@@ -4,6 +4,7 @@ import os
 from datetime import date
 
 import httpx
+from fastapi import HTTPException
 
 from .models import ResearchRequest
 
@@ -50,11 +51,12 @@ def event(kind, **fields):
 
 
 class Chat:
-    def __init__(self, store, harness, quotes, market):
+    def __init__(self, store, harness, quotes, market, charge_research=None):
         self.store = store
         self.harness = harness
         self.quotes = quotes
         self.market = market
+        self.charge_research = charge_research
         self.lock = asyncio.Lock()
 
     async def execute(self, name, args):
@@ -68,6 +70,8 @@ class Chat:
             if self.harness.lock.locked():
                 raise ValueError("A research run is already in progress.")
             request = ResearchRequest(**args, mode="live")
+            if self.charge_research:
+                self.charge_research()
             return self.report_context(await self.harness.run(request))
         raise ValueError("Unknown research tool")
 
@@ -193,6 +197,9 @@ class Chat:
                             if index == 0
                             else {"error": "One tool per round."}
                         )
+                    except HTTPException as error:
+                        yield event("error", message=error.detail)
+                        return
                     except (ValueError, KeyError, TypeError):
                         result = {
                             "error": "Tool unavailable or invalid inputs. Check provider access and report ID."

@@ -41,9 +41,11 @@ docker run --env-file .env \
   -v thesis-ledger-data:/data -p 127.0.0.1:8000:8000 thesis-ledger
 ```
 
-Use `https://research.your-domain.example/mcp/` in compatible clients with `Authorization: Bearer YOUR_TOKEN`. For example, set the MCP server entry to `{"url":"https://research.your-domain.example/mcp/","headers":{"Authorization":"Bearer YOUR_TOKEN"}}`. Enter that same token when the browser shows **Unlock Thesis Ledger**. The browser retains it in session storage only. Static assets and `/health` are public; research routes and MCP require the token.
+Use `https://research.your-domain.example/mcp/` in compatible clients with `Authorization: Bearer YOUR_TOKEN`. For example, set the MCP server entry to `{"url":"https://research.your-domain.example/mcp/","headers":{"Authorization":"Bearer YOUR_TOKEN"}}`. Enter that same token when the browser shows **Unlock Thesis Ledger**. The browser retains it in session storage only. Static assets and `/health` are public. MCP always requires the token when it is configured. The browser workspace can be shared by setting `LEDGER_PUBLIC=1` alongside the token.
 
-This is a **single-user trust boundary**. Anyone with the token can read all research, create paid runs, and review memories. Before offering a public multi-user product, add user accounts, OAuth-compatible MCP authorization, tenant-isolated databases, quotas, a durable queue, audit retention, and an explicit data-provider redistribution policy. Do not market this shared-token prototype as a multi-tenant service.
+The Render Blueprint enables a public browser workspace. A signed browser cookie scopes reports, chat, and thesis memories to that visitor. The bearer token grants access to the owner workspace and MCP. The same browser can reuse its saved theses while the cookie and storage are available.
+
+Visitors can start up to 3 research runs, send 15 chat messages, and generate 20 uncached forecasts per UTC day. Site-wide caps are 30 research runs, 150 messages, and 200 uncached forecasts. Requests to the public API also have a daily cap of 500 per visitor and 5,000 across the site.
 
 ## Backups and upgrades
 
@@ -51,7 +53,7 @@ Back up SQLite using its backup API or while the service is stopped; copying onl
 
 ## Free deployment on Render
 
-For the fastest setup, create a **Blueprint** in Render from this repository and select the branch containing `render.yaml`. It provisions a free Docker web service, generates the dashboard access token, and prompts for OpenAI, Alpha Vantage, and Alpaca credentials. Get the generated `LEDGER_API_TOKEN` from the service's Environment page and enter it when Thesis Ledger prompts you to unlock the workspace. Render provides the allowed hostname automatically.
+For the fastest setup, create a **Blueprint** in Render from this repository and select the branch containing `render.yaml`. It provisions a free Docker web service, generates the owner token, and prompts for OpenAI, Alpha Vantage, and Alpaca credentials. The service’s Environment page provides `LEDGER_API_TOKEN` for owner and MCP access. Render provides the allowed hostname automatically.
 
 To configure the service without a Blueprint:
 
@@ -61,13 +63,13 @@ I use a single Docker web service for the UI, chat API, and HTTP MCP. In Render,
 - `LEDGER_API_TOKEN` to a random secret of at least 32 characters.
 - `OPENAI_KEY` and `ALPHA_VANTAGE` to the provider keys. Set Alpaca credentials or Alpha Vantage real-time entitlement only if available.
 
-Open the service URL and enter the token when prompted to unlock Thesis Ledger. Use the service URL plus `/mcp/` for clients that accept custom bearer headers. The service is single-user. Anyone who has the token shares the same database and provider quotas.
+Set `LEDGER_PUBLIC=1` to share the browser workspace. Use the service URL plus `/mcp/` for clients that accept custom bearer headers.
 
 SEC EDGAR provides company financials when the Alpha Vantage overview is unavailable. It needs no API key. Set `LEDGER_SEC_USER_AGENT` to a project name and contact email to identify requests for your deployment.
 
-The standard Docker image includes chat, prices, MCP, and bootstrap scenarios. The Forecast tab defaults to historical-return scenarios from completed daily market bars. Enabling Kronos in that tab requires a custom image with the upstream checkout and inference dependencies, plus sufficient RAM and compute. I run Kronos locally for the free setup.
+The standard Docker image includes chat, prices, MCP, and bootstrap scenarios. The Forecast tab shows historical-return scenarios from completed daily market bars.
 
-Render's free service sleeps when idle and loses local SQLite data across restarts or redeploys. Use local hosting for durable free storage or attach persistent storage on a paid service. Model calls and provider data plans are billed separately from hosting. See [Render free service limits](https://render.com/docs/free).
+Render's free service sleeps when idle and loses local SQLite data across restarts or redeploys. To keep reports, memory, and daily quota counters across restarts on Render, attach a persistent disk at `/data` on a paid web service. A local Docker volume at the same path also preserves the SQLite files. Model calls and provider data plans are billed separately from hosting. See [Render free service limits](https://render.com/docs/free).
 
 ## ChatGPT connection
 

@@ -159,3 +159,33 @@ def test_export_downloads_the_requested_completed_report(tmp_path, monkeypatch):
             assert len(forecast) == run["request"]["horizon"]
             evidence = list(csv.DictReader(StringIO(archive.read("evidence.csv").decode())))
             assert evidence[0]["id"] == "prices"
+
+
+def test_public_workspace_isolated_and_metered_across_app_restarts(tmp_path, monkeypatch):
+    monkeypatch.setenv("LEDGER_PUBLIC", "1")
+    monkeypatch.setenv("LEDGER_API_TOKEN", "owner-test-token")
+    owner_headers = {"Authorization": "Bearer owner-test-token"}
+    fixture = {"ticker": "NVDA", "mode": "demo"}
+    app = create_app(tmp_path)
+    with TestClient(app) as first, TestClient(create_app(tmp_path)) as second:
+        owner = first.post("/api/research", headers=owner_headers, json=fixture).json()
+        assert first.get("/api/config").json()["public_visitor"] is True
+        assert first.get("/api/runs").json() == []
+        assert first.get("/api/runs/" + owner["id"]).status_code == 404
+        assert first.post("/mcp/", json={}).status_code == 401
+
+        run = first.post("/api/research", json=fixture).json()
+        assert run["status"] == "complete"
+        assert second.get("/api/memories").json() == []
+        assert second.get("/api/runs/" + run["id"] + "/export").status_code == 404
+        followup = first.post("/api/research", json=fixture).json()
+        assert any(memory["run_id"] == run["id"] for memory in followup["memories"])
+        assert first.post("/api/research", json=fixture).status_code == 200
+        cookies = dict(first.cookies)
+
+    with TestClient(create_app(tmp_path), cookies=cookies) as restarted:
+        assert len(restarted.get("/api/memories").json()) == 3
+        limited = restarted.post("/api/research", json=fixture)
+        assert limited.status_code == 429
+        assert "daily research limit" in limited.json()["detail"]
+        assert int(limited.headers["retry-after"]) > 0
