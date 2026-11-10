@@ -5,7 +5,12 @@ from .models import AgentReport
 
 ROLES = {
     "technical": "Analyze trend, momentum, volatility, and indicator limitations.",
-    "fundamentals": "Analyze valuation, margins, growth and financial quality. Abstain without fundamentals.",
+    "fundamentals": (
+        "Analyze the company figures that are available and cite the company overview or filing. "
+        "When only a filing is supplied, discuss its reported results and distinguish missing "
+        "valuation or comparison data. You may abstain on the broader thesis while still citing "
+        "the source for the figures you discuss."
+    ),
     "news": "Analyze sourced catalysts, dates, and event uncertainty. Abstain without news.",
     "sentiment": "Separate social sentiment from news. No social data is supplied; explicitly abstain.",
     "bull": "Build the strongest supported bullish thesis; address the bear case when available.",
