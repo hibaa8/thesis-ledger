@@ -55,7 +55,7 @@ I keep forecasts separate until synthesis so analysts can form and challenge a t
 
 ## MCP and hosting
 
-The app exposes Streamable HTTP MCP at `/mcp/`. It also supports local stdio through `uv run thesis-ledger-mcp`. The tools cover the market brief, latest price, research, saved reports, recovery, thesis search, and thesis review. See the [deployment and MCP guide](docs/deployment.md) for client configuration and a free Render deployment. SQLite persists on local disk; Render's free filesystem is ephemeral.
+The hosted app exposes public market tools at `/mcp/public/`. The full toolkit is available through the token-protected `/mcp/` endpoint or local stdio with `uv run thesis-ledger-mcp`. The tools cover the market brief, latest price, research, saved reports, recovery, thesis search, and thesis review. See the [deployment and MCP guide](docs/deployment.md) for client configuration and a free Render deployment. SQLite persists on local disk; Render's free filesystem is ephemeral.
 
 ## Papers that inspired this project
 

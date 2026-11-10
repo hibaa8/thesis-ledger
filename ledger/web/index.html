@@ -265,41 +265,36 @@
       <main id="connect" class="page">
         <div class="eyebrow">ONE WORKFLOW. YOUR FAVORITE CLIENT.</div>
         <h1>Research, wherever you work.</h1>
-        <p class="subtitle">
-          Connect Claude Desktop or Cursor to the same research and memory
-          tools.
-        </p>
+        <p class="subtitle">Connect a client over Streamable HTTP or run the full toolkit locally.</p>
+        <section id="public-mcp" class="panel prose" hidden>
+          <span class="chip">PUBLIC · MARKET DATA</span>
+          <h2>Connect without signing in</h2>
+          <code id="public-mcp-url"></code>
+          <p>Ask for a market brief or a stock’s latest available quote. This connection has daily usage limits.</p>
+          <p><strong>Claude.</strong> Open Customize → Connectors, add a custom web connector, paste the URL, and select No sign in.</p>
+          <p><strong>Cursor.</strong> Merge this entry into your global or project <code>mcp.json</code>, then enable the server in Cursor.</p>
+          <pre id="public-mcp-config"></pre>
+          <button class="secondary" id="copy-public-config">Copy Cursor configuration</button>
+          <p>Try asking your client to use Thesis Ledger to fetch the latest available NVDA quote and include its source and timestamp.</p>
+        </section>
         <div class="two-col">
           <section class="panel prose">
-            <span class="chip">LOCAL · STDIO</span>
-            <h2>Claude Desktop & Cursor</h2>
-            <p>
-              Install the project, then merge this configuration into your
-              client's MCP settings. Replace the checkout path if needed.
-            </p>
-            <pre id="mcp-config"></pre>
-            <button class="secondary" id="copy-config">
-              Copy configuration
-            </button>
+            <span class="chip">OWNER · STREAMABLE HTTP</span>
+            <h2>Full hosted toolkit</h2>
+            <code id="mcp-url"></code>
+            <p>Use a client that supports custom request headers, such as Cursor. Set <code>Authorization: Bearer &lt;LEDGER_API_TOKEN&gt;</code> using the owner token from Render. Keep it private. It grants access to saved owner research and can start model runs.</p>
           </section>
           <section class="panel prose">
-            <span class="chip">STREAMABLE HTTP</span>
-            <h2>A single endpoint</h2>
-            <code id="mcp-url"></code>
-            <p>
-              While this app is running, clients with HTTP MCP support can
-              connect here. A local address only works on this machine.
-            </p>
-            <p>
-              For a shareable link, deploy the Python service behind HTTPS and
-              set an access token. See <strong>docs/deployment.md</strong> for
-              authentication, persistent storage, and client setup.
-            </p>
-
+            <span class="chip">LOCAL · STDIO</span>
+            <h2>Run your own copy</h2>
+            <p>With repository access, install uv, run <code>uv sync</code>, and put provider credentials in the checkout’s <code>.env</code>. Replace both paths below with the full paths on your machine.</p>
+            <p>Merge this into Claude Desktop’s Developer → Edit Config or Cursor’s <code>mcp.json</code>. Restart the client after saving.</p>
+            <pre id="mcp-config"></pre>
+            <button class="secondary" id="copy-config">Copy local configuration</button>
           </section>
         </div>
         <section class="panel prose">
-          <h2>Research tools</h2>
+          <h2>Tools in the full toolkit</h2>
           <div class="tools-grid">
             <div>
               <code>market_brief</code>

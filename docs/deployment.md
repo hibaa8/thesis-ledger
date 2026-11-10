@@ -1,24 +1,42 @@
 # Deployment and MCP clients
 
-The delivered default is local-only. A localhost MCP URL cannot be used by someone on another computer or by a cloud-hosted client.
+## Public market data
 
-## Local clients
+Use `https://thesis-ledger.onrender.com/mcp/public/` with Streamable HTTP. This endpoint offers `market_brief` and `latest_price` without a token, OAuth, or a local checkout. The site-wide allowance is 1,000 MCP requests per UTC day. Clients that retain cookies also have a 100-request allowance per visitor.
 
-Claude Desktop and Cursor can run `thesis-ledger-mcp` over stdio using the configuration in the README. Desktop app environment variables are separate from your terminal. Include the necessary provider variables in the client's MCP environment configuration, or launch the client from a shell with them set. Never commit credentials.
-
-For a client that supports Streamable HTTP and configurable headers:
+- **Claude.** Open Customize → Connectors, add a custom web connector, paste the endpoint, and choose **No sign in**. Enable the connector for your conversation. [Claude connector instructions](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp)
+- **Cursor.** Merge the following entry into `~/.cursor/mcp.json` or your project’s `.cursor/mcp.json`. Enable the server in Cursor. [Cursor MCP instructions](https://cursor.com/docs/mcp)
 
 ```json
 {
   "mcpServers": {
-    "thesis-ledger": {
-      "url": "http://127.0.0.1:8000/mcp/"
+    "thesis-ledger-market": {
+      "url": "https://thesis-ledger.onrender.com/mcp/public/"
     }
   }
 }
 ```
 
-The trailing slash is intentional. This endpoint is MCP, not an OpenAI plugin manifest. The stdio setup is the portable path for Claude Desktop. Remote Claude connectors may require OAuth; this prototype implements a bearer token, not a full OAuth authorization server.
+Try asking your client to fetch the latest available NVDA quote and include the feed and observation time.
+
+## Full toolkit without OAuth
+
+**Hosted owner access.** Cursor and other clients that support custom request headers can use `https://thesis-ledger.onrender.com/mcp/`. Set `Authorization` to `Bearer ${env:LEDGER_API_TOKEN}` in Cursor and make the environment variable available to the Cursor process. The token is the service’s owner credential. Keep it out of shared configs and repositories.
+
+**Local stdio.** With repository access, install uv, run `uv sync` in the checkout, and configure the checkout’s `.env` using `.env.example`. Claude Desktop users can open Settings → Developer → Edit Config. Cursor users can edit `mcp.json`. Merge the entry below and replace both paths with your absolute paths. The client starts the server when needed.
+
+```json
+{
+  "mcpServers": {
+    "thesis-ledger": {
+      "command": "/absolute/path/to/uv",
+      "args": ["--directory", "/absolute/path/to/thesis-ledger", "run", "thesis-ledger-mcp"]
+    }
+  }
+}
+```
+
+Local runs and memories use your local database. A localhost URL is accessible only from the machine running it.
 
 ## Host your own private endpoint
 
@@ -73,6 +91,4 @@ Render's free service sleeps when idle and loses local SQLite data across restar
 
 ## ChatGPT connection
 
-For the existing token-protected deployment, a client such as Cursor can send the configured bearer header. ChatGPT's custom MCP connection uses OAuth for authenticated servers. Before connecting the full Thesis Ledger toolkit, configure OAuth 2.1 for the MCP endpoint. Keep the token-protected tools private until then.
-
-With an eligible workspace and permission to add custom MCP servers, open **Plugins → Add custom MCP server** in ChatGPT on the web. Use the hosted HTTPS URL ending in `/mcp/` or a Secure MCP Tunnel, select OAuth, and install the connection. Start a chat, type `@`, select the plugin, and ask for a market brief. See [ChatGPT connection steps](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt) and [MCP authentication](https://developers.openai.com/plugins/build/auth).
+If your workspace allows adding custom MCP servers, use **Plugins → Add custom MCP server** with the public HTTPS endpoint ending in `/mcp/public/` and the option for no authentication. Use the public endpoint for the market tools. The full hosted toolkit uses a static owner bearer token, so use a client that can set that header. [Official OpenAI documentation](https://developers.openai.com/plugins/build/auth#triggering-authentication-ui)

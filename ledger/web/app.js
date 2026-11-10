@@ -49,7 +49,7 @@ $("asof").max = localDate;
 const config = {
   mcpServers: {
     "thesis-ledger": {
-      command: "uv",
+      command: "/absolute/path/to/uv",
       args: [
         "--directory",
         "/absolute/path/to/thesis-ledger",
@@ -59,16 +59,21 @@ const config = {
     },
   },
 };
-$("mcp-config").textContent = JSON.stringify(config, null, 2);
+function showMcpConfig(target, button, value, label) {
+  const json = JSON.stringify(value, null, 2);
+  $(target).textContent = json;
+  $(button).onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(json);
+      $(button).textContent = "Copied";
+      setTimeout(() => { $(button).textContent = label; }, 1500);
+    } catch {
+      $(button).textContent = "Select and copy the configuration above";
+    }
+  };
+}
+showMcpConfig("mcp-config", "copy-config", config, "Copy local configuration");
 $("mcp-url").textContent = location.origin + "/mcp/";
-$("copy-config").onclick = async () => {
-  try {
-    await navigator.clipboard.writeText(JSON.stringify(config, null, 2));
-    $("copy-config").textContent = "Copied";
-  } catch {
-    $("copy-config").textContent = "Select and copy the configuration above";
-  }
-};
 function openAuth() {
   const dialog = $("auth-dialog");
   if (dialog.open) return;
@@ -473,6 +478,14 @@ api("/config")
   .then(async (c) => {
     liveReady = c.live_ready;
     alpacaReady = c.alpaca_ready;
+    if (c.public_mcp_path) {
+      const url = new URL(c.public_mcp_path, location.origin).href;
+      $("public-mcp-url").textContent = url;
+      showMcpConfig("public-mcp-config", "copy-public-config", {
+        mcpServers: { "thesis-ledger-market": { url } },
+      }, "Copy Cursor configuration");
+      $("public-mcp").hidden = false;
+    }
     refreshMarket();
     await selectTicker(selectedTicker, !c.public_visitor);
   })
