@@ -105,3 +105,54 @@ def test_stock_snapshot_keeps_company_evidence_when_prices_are_unavailable(monke
     assert "daily_technicals" not in result
     assert [item["id"] for item in result["evidence"]] == ["fundamentals", "company-news-1"]
     assert "Latest quote unavailable." in result["warnings"]
+
+
+def test_chat_checks_saved_thesis_before_current_outlook(tmp_path, monkeypatch):
+    from ledger.store import Store
+
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("LLM_MODEL", "test-model")
+    run_id = "c" * 32
+    Store(tmp_path).save({
+        "id": run_id,
+        "created": "2020-01-02T00:00:00+00:00",
+        "status": "complete",
+        "request": {"ticker": "GOOGL", "mode": "live", "as_of": "2020-01-02"},
+        "decision": {"summary": "Saved Alphabet thesis."},
+        "metrics": {"last": 120},
+        "snapshot": {"evidence": []},
+    })
+    calls = []
+
+    def upstream(request):
+        payload = json.loads(request.content)
+        calls.append(payload)
+        if len(calls) == 1:
+            assert payload["tool_choice"]["function"]["name"] == "latest_report"
+            delta = {"tool_calls": [{
+                "index": 0, "id": "call_report",
+                "function": {"name": "latest_report", "arguments": '{"ticker":"GOOGL"}'},
+            }]}
+        else:
+            report = json.loads(payload["messages"][-1]["content"])
+            assert report["id"] == run_id
+            assert report["decision"]["summary"] == "Saved Alphabet thesis."
+            assert report["metrics"]["last"] == 120
+            delta = {"content": "The saved Alphabet thesis identified an upside case."}
+        return httpx.Response(
+            200, text="data: " + json.dumps({"choices": [{"delta": delta}]}) + "\n\ndata: [DONE]\n\n"
+        )
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx, "AsyncClient",
+        lambda **opts: real_client(transport=httpx.MockTransport(upstream), **opts),
+    )
+    with TestClient(create_app(tmp_path)) as client:
+        response = client.post("/api/chat", json={
+            "session": "a" * 32, "ticker": "NVDA",
+            "message": "What are your thoughts on my Google thesis ledger? Worth investing right now?",
+        })
+        assert "Looking for the latest saved report" in response.text
+        assert "The saved Alphabet thesis" in response.text
+        assert len(calls) == 2
