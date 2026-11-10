@@ -1,5 +1,6 @@
 """Optional, source-linked X commentary from the xAI Responses API."""
 
+import logging
 import os
 import re
 from datetime import date, timedelta
@@ -12,6 +13,7 @@ POST_URL = re.compile(
 )
 INLINE_CITATION = re.compile(r"\[\[\d+\]\]\((https://[^\s)]+)\)")
 MAX_POSTS = 2
+logger = logging.getLogger(__name__)
 
 
 def cited_posts(payload, start, end):
@@ -57,12 +59,16 @@ async def x_post_evidence(client, ticker, as_of):
     if not (key := os.getenv("XAI_API_KEY")):
         return []
     start = as_of - timedelta(days=3)
+    model = os.getenv("LEDGER_XAI_MODEL") or "grok-4.7"
+    # Source lookup is a bounded extraction task. Keep custom models on their own defaults.
+    reasoning = {"reasoning": {"effort": "low"}} if model == "grok-4.7" else {}
     try:
         response = await client.post(
             "https://api.x.ai/v1/responses",
             headers={"Authorization": f"Bearer {key}"},
             json={
-                "model": os.getenv("LEDGER_XAI_MODEL") or "grok-4.7",
+                "model": model,
+                **reasoning,
                 "input": (
                     f"Use X Search for US-listed ${ticker}. Find up to {MAX_POSTS} recent, "
                     "material original posts from relevant company accounts, named executives, "
@@ -84,5 +90,8 @@ async def x_post_evidence(client, ticker, as_of):
         )
         response.raise_for_status()
         return cited_posts(response.json(), start, as_of)
-    except (httpx.HTTPError, ValueError, TypeError, AttributeError):
-        return []
+    except httpx.HTTPStatusError as exc:
+        logger.warning("X Search returned HTTP %s for %s", exc.response.status_code, ticker)
+    except (httpx.HTTPError, ValueError, TypeError, AttributeError) as exc:
+        logger.warning("X Search failed for %s (%s)", ticker, type(exc).__name__)
+    return []
