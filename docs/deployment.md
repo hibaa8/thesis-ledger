@@ -63,7 +63,7 @@ I use a single Docker web service for the UI, chat API, and HTTP MCP. In Render,
 
 Open the service URL and enter the access token from the dashboard's **Access token** button. Use the service URL plus `/mcp/` for clients that accept custom bearer headers. The service is single-user. Anyone who has the token shares the same database and provider quotas.
 
-The standard Docker image includes chat, prices, MCP, and bootstrap scenarios. The dedicated Kronos tab requires a custom image with the upstream checkout and inference dependencies, plus sufficient RAM and compute. I run Kronos locally for the free setup.
+The standard Docker image includes chat, prices, MCP, and bootstrap scenarios. The Forecast tab defaults to historical-return scenarios from completed daily market bars. Enabling Kronos in that tab requires a custom image with the upstream checkout and inference dependencies, plus sufficient RAM and compute. I run Kronos locally for the free setup.
 
 Render's free service sleeps when idle and loses local SQLite data across restarts or redeploys. Use local hosting for durable free storage or attach persistent storage on a paid service. Model calls and provider data plans are billed separately from hosting. See [Render free service limits](https://render.com/docs/free).
 

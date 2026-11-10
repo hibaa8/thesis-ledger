@@ -179,11 +179,12 @@ def create_app(directory=None):
 
     @app.post("/api/forecast")
     async def forecast(req: ResearchRequest):
-        key = f"kronos-small:{req.mode}:{req.ticker}:{req.horizon}:{req.as_of}"
+        cache_model = "kronos-small" if req.forecast == "kronos" else "bootstrap"
+        key = f"{cache_model}:{req.mode}:{req.ticker}:{req.horizon}:{req.as_of}"
         cached = store.cached_forecast(key)
         if cached is not None:
             return cached
-        if not os.getenv("KRONOS_PATH"):
+        if req.forecast == "kronos" and not os.getenv("KRONOS_PATH"):
             raise HTTPException(
                 503, "Configure KRONOS_PATH and install Kronos to run this forecast."
             )
@@ -193,7 +194,7 @@ def create_app(directory=None):
             try:
                 market = await snapshot(req, include_research_sources=False)
                 result = await asyncio.to_thread(
-                    forecast_bounded, market["bars"], req.horizon, "kronos"
+                    forecast_bounded, market["bars"], req.horizon, req.forecast
                 )
             except (ValueError, httpx.HTTPError) as exc:
                 detail = (

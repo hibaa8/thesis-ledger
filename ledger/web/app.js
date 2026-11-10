@@ -455,6 +455,11 @@ api("/config")
       $("mode").options[1].textContent = "Live (setup required)";
     if (!c.kronos_configured)
       $("engine").options[1].textContent = "Kronos (setup required)";
+    if (c.kronos_configured) {
+      const kronosOption = $("forecast-engine").options[1];
+      kronosOption.disabled = false;
+      kronosOption.textContent = "Kronos-small";
+    }
     refreshMarket();
     await selectTicker(selectedTicker, true);
   })
@@ -611,7 +616,7 @@ $("forecast-form").onsubmit = async (e) => {
   $("forecast-submit").disabled = true;
   $("forecast-chart").replaceChildren();
   $("forecast-caption").textContent = "";
-  $("forecast-status").textContent = "Fetching daily bars and sampling Kronos paths…";
+  $("forecast-status").textContent = "Fetching daily bars and sampling price paths…";
   try {
     const result = await api("/forecast", {
       method: "POST",
@@ -619,7 +624,7 @@ $("forecast-form").onsubmit = async (e) => {
         ticker: $("forecast-ticker").value.trim().toUpperCase(),
         horizon: Number($("forecast-horizon").value),
         mode: $("forecast-mode").value,
-        forecast: "kronos",
+        forecast: $("forecast-engine").value,
       }),
     });
     chart(result, "forecast-chart", 40);
@@ -627,7 +632,9 @@ $("forecast-form").onsubmit = async (e) => {
       result.request.ticker + " · " + result.forecast.label + " · " +
       (result.request.mode === "demo" ? "Synthetic demo" : result.snapshot.provider) +
       " · Last bar " + result.snapshot.bars.at(-1).date;
-    $("forecast-caption").textContent = result.forecast.disclaimer;
+    $("forecast-caption").textContent = [result.forecast.disclaimer, ...result.snapshot.warnings.filter(
+      (warning) => warning.startsWith("STALE") || warning.startsWith("Daily bars"),
+    )].join(" ");
   } catch (err) {
     $("forecast-status").textContent = err.message;
   } finally {
