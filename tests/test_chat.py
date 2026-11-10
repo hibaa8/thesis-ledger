@@ -156,3 +156,55 @@ def test_chat_checks_saved_thesis_before_current_outlook(tmp_path, monkeypatch):
         assert "Looking for the latest saved report" in response.text
         assert "The saved Alphabet thesis" in response.text
         assert len(calls) == 2
+
+
+def test_stock_outlook_checks_ledger_even_if_model_requests_snapshot_first(tmp_path, monkeypatch):
+    from ledger.chat import Chat
+    from ledger.store import Store
+
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("LLM_MODEL", "test-model")
+    report_id = "d" * 32
+    Store(tmp_path).save({
+        "id": report_id,
+        "created": "2020-01-02T00:00:00+00:00",
+        "status": "complete",
+        "request": {"ticker": "GOOGL", "mode": "live", "as_of": "2020-01-02"},
+        "decision": {"summary": "Saved Alphabet outlook."},
+        "snapshot": {"evidence": []},
+    })
+
+    execute = Chat.execute
+
+    async def lookup_only(self, name, args):
+        assert name == "latest_report", "The model should receive the saved report before any data fetch"
+        return await execute(self, name, args)
+
+    monkeypatch.setattr(Chat, "execute", lookup_only)
+
+    def upstream(request):
+        messages = json.loads(request.content)["messages"]
+        if messages[-1]["role"] == "user":
+            delta = {"tool_calls": [{
+                "index": 0, "id": "call_snapshot",
+                "function": {"name": "stock_snapshot", "arguments": '{"ticker":"GOOGL"}'},
+            }]}
+        else:
+            assert json.loads(messages[-1]["content"])["id"] == report_id
+            delta = {"content": "The saved Alphabet outlook found mixed evidence."}
+        return httpx.Response(
+            200, text="data: " + json.dumps({"choices": [{"delta": delta}]}) + "\n\ndata: [DONE]\n\n"
+        )
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda **opts: real_client(transport=httpx.MockTransport(upstream), **opts),
+    )
+    with TestClient(create_app(tmp_path)) as client:
+        response = client.post("/api/chat", json={
+            "session": "a" * 32, "ticker": "NVDA", "message": "What's the outlook for Alphabet?",
+        })
+        assert "Looking for the latest saved report" in response.text
+        assert "The saved Alphabet outlook" in response.text

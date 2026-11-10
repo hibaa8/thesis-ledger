@@ -46,7 +46,7 @@ TOOLS = [
     ),
     tool(
         "latest_report",
-        "Find the latest saved report for a ticker when the user refers to existing research.",
+        "Check the Thesis Ledger for the latest completed report before analyzing any specific stock.",
         ticker="US stock ticker",
     ),
     tool("read_report", "Read a saved live research report by its exact known ID.", run_id="Saved run ID"),
@@ -58,6 +58,15 @@ TOOLS = [
         as_of="ISO market date",
     ),
 ]
+
+
+TOOL_STATUS = {
+    "latest_price": "Checking the latest price…",
+    "stock_snapshot": "Checking price history, filings, and company headlines…",
+    "latest_report": "Looking for the latest saved report…",
+    "research": "Running analysts, debate, and risk review…",
+    "read_report": "Reading the saved report…",
+}
 
 
 SAVED_RESEARCH = re.compile(
@@ -171,9 +180,11 @@ class Chat:
             f"You are Thesis Ledger, an evidence-first US equity research assistant. "
             f"Today is {date.today().isoformat()}. Selected ticker: {ticker}. "
             "You can read the saved reports visible in this workspace, including the user's Thesis Ledger. "
-            "For questions about a saved report, start with latest_report for the named company or read_report for an exact ID. "
-            "When the user also asks about the stock right now, read the report first and then call stock_snapshot for the same ticker. "
-            "For other questions about a specific stock outlook, earnings, valuation, catalysts, or trade evaluation, call stock_snapshot before answering. "
+            "For any specific stock analysis, start with latest_report for that company. Use read_report for an exact saved ID. "
+            "If a report exists, use its as-of date, findings, and evidence as the starting point. "
+            "If it covers the question and is recent enough for it, answer from the report. "
+            "Fetch a current quote or a stock_snapshot only for missing evidence or to check developments since the report. "
+            "When you fetch current data, explain what changed since the saved report. "
             "Resolve named companies to tickers, and use the selected ticker only when the user does not specify one. "
             "Use latest_price for quote-only questions and market_brief for market-wide questions. "
             "Explain evidence supporting and challenging the outlook and what could change it. Avoid personalized trade instructions. "
@@ -189,6 +200,7 @@ class Chat:
         messages.append({"role": "user", "content": question})
         answer = ""
         checked_sources = {}
+        checked_tickers = set()
         url = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/")
         headers = {"Authorization": f"Bearer {os.environ['LLM_API_KEY']}"}
         async with httpx.AsyncClient(timeout=60) as client:
@@ -267,22 +279,29 @@ class Chat:
                 for index, call in enumerate(calls.values()):
                     fn = call["function"]
                     name = fn["name"]
-                    yield event(
-                        "status",
-                        message={
-                            "latest_price": "Checking the latest price…",
-                            "stock_snapshot": "Checking price history, filings, and company headlines…",
-                            "latest_report": "Looking for the latest saved report…",
-                            "research": "Running analysts, debate, and risk review…",
-                            "read_report": "Reading the saved report…",
-                        }.get(name, "Checking research…"),
-                    )
                     try:
-                        result = (
-                            await self.execute(name, json.loads(fn["arguments"]))
-                            if index == 0
-                            else {"error": "One tool per round."}
-                        )
+                        result = {"error": "One tool per round."}
+                        if index == 0:
+                            args = json.loads(fn["arguments"])
+                            symbol = (
+                                args["ticker"].strip().upper()
+                                if name in {"latest_report", "stock_snapshot"}
+                                else None
+                            )
+                            saved_report = None
+                            if name == "stock_snapshot" and symbol not in checked_tickers:
+                                yield event("status", message=TOOL_STATUS["latest_report"])
+                                saved_report = await self.execute("latest_report", args)
+                                checked_tickers.add(symbol)
+                            if saved_report and "id" in saved_report:
+                                result = saved_report
+                            else:
+                                yield event("status", message=TOOL_STATUS.get(name, "Checking research…"))
+                                result = await self.execute(name, args)
+                            if name == "latest_report":
+                                checked_tickers.add(symbol)
+                            if name == "read_report" and "request" in result:
+                                checked_tickers.add(result["request"]["ticker"])
                     except HTTPException as error:
                         yield event("error", message=error.detail)
                         return
