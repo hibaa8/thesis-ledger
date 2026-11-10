@@ -1,7 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-type="software">
   <head>
     <meta charset="utf-8" />
+    <meta name="page-type" content="software" />
+    <meta name="site-kind" content="software" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Thesis Ledger — Research with a memory</title>
     <link rel="stylesheet" href="/static/style.css" />
@@ -95,29 +97,39 @@
         </section>
       </main>
       <main id="research" class="page active">
-        <div class="eyebrow">YOUR MULTI-AGENT RESEARCH DESK</div>
         <div class="title-row">
           <div>
-            <h1>A thesis. Every side of it.</h1>
-            <p class="subtitle">
-              Independent perspectives, forecast scenarios, and a memory that
-              evolves.
-            </p>
+            <div class="eyebrow">U.S. EQUITIES</div>
+            <h1>Market desk</h1>
+            <p class="subtitle">Follow the session, read company news, and research any U.S. stock.</p>
           </div>
-          <button id="export" class="secondary" disabled>
-            ↓ &nbsp; Export research
-          </button>
+          <button id="export" class="secondary" disabled>Export research</button>
         </div>
-        <section class="panel market-panel" aria-label="Market brief">
-          <div class="eyebrow">MARKET BRIEF</div>
-          <h2>U.S. market snapshot</h2>
-          <p id="market-summary" role="status">Fetching market prices and headlines…</p>
-          <div id="market-quotes" class="market-quotes"></div>
-          <h3>Latest headlines</h3>
-          <ul id="market-news" class="market-news"></ul>
-          <p id="market-warning" class="subtitle"></p>
+        <section class="market-workspace panel" aria-label="Market desk">
+          <div class="intraday-panel">
+            <div class="instrument-head">
+              <div><span class="eyebrow">SELECTED SYMBOL</span><h2 id="desk-symbol">NVDA</h2></div>
+              <form id="symbol-form">
+                <label for="symbol-search">Find a symbol</label>
+                <div><input id="symbol-search" value="NVDA" maxlength="10" required /><button class="secondary">View</button></div>
+              </form>
+            </div>
+            <div id="desk-quote" aria-live="polite"></div>
+            <div class="intraday-meta"><strong>5-minute candles</strong><span id="intraday-status" role="status">Loading session…</span></div>
+            <div id="intraday-chart"></div>
+          </div>
+          <aside class="watchlist">
+            <div class="watchlist-head"><h2>Watchlist</h2><p id="market-summary" role="status">Loading market prices…</p></div>
+            <div class="watchlist-labels"><span>Symbol</span><span>Last</span><span>Move</span></div>
+            <div id="market-quotes" class="market-quotes"></div>
+            <p id="market-warning" class="subtitle"></p>
+          </aside>
         </section>
-        <div id="desk-quote" class="quote-card" aria-live="polite"></div>
+        <div class="news-grid">
+          <section aria-label="Selected company news"><h2 id="company-news-heading">NVDA headlines</h2><ul id="company-news" class="market-news"></ul></section>
+          <section aria-label="Market headlines"><h2>Market headlines</h2><ul id="market-news" class="market-news"></ul></section>
+        </div>
+        <h2 id="research-heading">Research · NVDA</h2>
         <form id="research-form" class="research-form">
           <div class="form-top">
             <label

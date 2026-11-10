@@ -28,3 +28,20 @@ def test_dashboard_reuses_live_report_and_ignores_demo(tmp_path):
         )
         assert client.get("/api/dashboard").json()["id"] == "live"
         assert client.post("/api/dashboard").json()["id"] == "live"
+
+
+def test_dashboard_lookup_is_scoped_to_selected_symbol(tmp_path):
+    store = Store(tmp_path)
+    request = ResearchRequest(mode="live").model_dump(mode="json")
+    for ticker in ("NVDA", "AAPL"):
+        store.save(
+            {
+                "id": ticker,
+                "created": "2026-01-02",
+                "status": "complete",
+                "request": request | {"ticker": ticker},
+            }
+        )
+    with TestClient(create_app(tmp_path)) as client:
+        assert client.get("/api/dashboard?ticker=aapl").json()["id"] == "AAPL"
+        assert client.get("/api/dashboard?ticker=MSFT").json() is None

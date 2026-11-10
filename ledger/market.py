@@ -10,6 +10,7 @@ import httpx
 
 
 MARKET_SYMBOLS = ("SPY", "QQQ", "DIA", "IWM", "AAPL", "MSFT", "NVDA")
+ALPACA_EXTRA_SYMBOLS = ("AMZN", "GOOGL", "META", "TSLA", "AVGO")
 NEWS_FEEDS = {
     "CNBC Markets": "https://www.cnbc.com/id/20910258/device/rss/rss.html",
     "Bureau of Labor Statistics": "https://www.bls.gov/feed/bls_latest.rss",
@@ -117,7 +118,10 @@ class MarketBrief:
 
     async def get_prices(self):
         prices, errors = [], []
-        for symbol in MARKET_SYMBOLS:
+        symbols = MARKET_SYMBOLS
+        if os.getenv("APCA_API_KEY_ID") and os.getenv("APCA_API_SECRET_KEY"):
+            symbols += ALPACA_EXTRA_SYMBOLS
+        for symbol in symbols:
             try:
                 prices.append(await self.quotes.get(symbol))
             except ValueError:
