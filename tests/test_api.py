@@ -38,7 +38,9 @@ def test_ui_api_and_mcp(tmp_path):
             headers=headers,
             json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
         )
-        assert len(r.json()["result"]["tools"]) == 5, r.text
+        assert "latest_price" in {
+            tool["name"] for tool in r.json()["result"]["tools"]
+        }, r.text
         r = client.post(
             "/mcp/",
             headers=headers,

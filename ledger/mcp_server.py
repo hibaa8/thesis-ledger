@@ -5,11 +5,13 @@ from mcp.server.fastmcp import FastMCP
 from .harness import Harness
 from .models import ResearchRequest, ReviewRequest
 from .store import Store
+from .quotes import Quotes
 
 
-def create_mcp(store=None, harness=None):
+def create_mcp(store=None, harness=None, quotes=None):
     store = store or Store()
     harness = harness or Harness(store)
+    quotes = quotes or Quotes()
     hosts = os.getenv("LEDGER_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
     security = TransportSecuritySettings(
         allowed_hosts=[v for h in hosts for v in [h, h + ":*"]],
@@ -74,10 +76,19 @@ def create_mcp(store=None, harness=None):
         """Resume a failed run from persisted stages within its original total call budget."""
         return await harness.run(resume_id=run_id)
 
+    @mcp.tool()
+    async def latest_price(ticker: str) -> dict:
+        """Get the latest available price with provider, observation time, and freshness."""
+        return await quotes.get(ticker)
+
     return mcp
 
 
+from .config import load_config
+
+
 def main():
+    load_config()
     parser = argparse.ArgumentParser()
     parser.parse_args()
     create_mcp().run(transport="stdio")

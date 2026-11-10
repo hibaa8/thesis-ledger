@@ -47,7 +47,7 @@ const config = {
       command: "uv",
       args: [
         "--directory",
-        "/Users/admin/Documents/thesis-ledger",
+        "/absolute/path/to/thesis-ledger",
         "run",
         "thesis-ledger-mcp",
       ],
@@ -83,6 +83,7 @@ async function page(name) {
     .querySelectorAll("[data-page]")
     .forEach((el) => el.classList.toggle("active", el.dataset.page === name));
   $("breadcrumb").textContent = {
+    chat: "Research chat",
     research: "Research desk",
     memory: "Thesis ledger",
     runs: "Research history",
@@ -90,10 +91,13 @@ async function page(name) {
     method: "How it works",
   }[name];
   try {
+    if (name === "chat") await openChat();
+    else clearTimeout(quoteTimer);
     if (name === "memory") await loadMemory();
     if (name === "runs") await loadRuns();
   } catch (e) {
-    const target = name === "memory" ? "memory-list" : "run-list";
+    const target = { chat: "chat-status", memory: "memory-list", runs: "run-list" }[name];
+    if (!target) return;
     $(target).textContent = e.message;
   }
 }
@@ -440,3 +444,133 @@ api("/config")
       $("engine").options[1].textContent = "Kronos (setup required)";
   })
   .catch((e) => status(e.message, true));
+
+let chatSession = localStorage.getItem("ledger-chat-session") || newChatId();
+let quoteTimer;
+let quoteRequest = 0;
+let chatBusy = false;
+
+function newChatId() {
+  const id = Array.from(crypto.getRandomValues(new Uint8Array(16)), (n) =>
+    n.toString(16).padStart(2, "0"),
+  ).join("");
+  localStorage.setItem("ledger-chat-session", id);
+  return id;
+}
+
+function chatBubble(role, text) {
+  const node = document.createElement("div");
+  node.className = "chat-message " + role;
+  node.textContent = text;
+  $("chat-messages").append(node);
+  node.scrollIntoView({ block: "nearest" });
+  return node;
+}
+
+async function openChat() {
+  if (!chatBusy) {
+    const history = await api("/chat/" + chatSession);
+    if (!chatBusy) {
+      $("chat-messages").replaceChildren();
+      for (const item of history) chatBubble(item.role, item.content);
+    }
+  }
+  if (!$("chat").dataset.opened) {
+    $("chat-ticker").value = $("ticker").value;
+    $("chat").dataset.opened = "1";
+  }
+  refreshQuote();
+}
+
+async function refreshQuote() {
+  clearTimeout(quoteTimer);
+  const request = ++quoteRequest;
+  const ticker = $("chat-ticker").value.trim().toUpperCase();
+  if (!/^[A-Z][A-Z0-9.\-]{0,9}$/.test(ticker)) {
+    $("quote-card").textContent = "Enter a valid ticker.";
+    return;
+  }
+  $("quote-card").textContent = "Checking " + ticker + "…";
+  try {
+    const q = await api("/quote/" + encodeURIComponent(ticker));
+    if (request !== quoteRequest) return;
+    $("quote-card").textContent =
+      q.ticker + "  $" + fmt(q.price) + "  ·  " + q.source + "  ·  " +
+      q.freshness + "  ·  " + q.as_of;
+    if (q.refresh_seconds && $("chat").classList.contains("active"))
+      quoteTimer = setTimeout(refreshQuote, q.refresh_seconds * 1000);
+  } catch (err) {
+    if (request === quoteRequest) $("quote-card").textContent = err.message;
+  }
+}
+
+$("refresh-quote").onclick = refreshQuote;
+$("chat-ticker").onchange = refreshQuote;
+$("new-chat").onclick = () => {
+  chatSession = newChatId();
+  $("chat-messages").replaceChildren();
+  $("chat-status").textContent = "";
+};
+$("chat-form").onsubmit = async (e) => {
+  e.preventDefault();
+  if (chatBusy) return;
+  const message = $("chat-input").value.trim();
+  const ticker = $("chat-ticker").value.trim().toUpperCase();
+  if (!message) return;
+  chatBusy = true;
+  $("chat-send").disabled = true;
+  $("new-chat").disabled = true;
+  $("chat-input").value = "";
+  chatBubble("user", message);
+  const answer = chatBubble("assistant", "");
+  $("chat-status").textContent = "Thinking…";
+  let done = false;
+  try {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: "Bearer " + token } : {}),
+      },
+      body: JSON.stringify({ session: chatSession, ticker, message }),
+    });
+    if (!response.ok) {
+      const data = await response.json();
+      throw Error(typeof data.detail === "string" ? data.detail : "Check your ticker and message.");
+    }
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = "";
+    try {
+      while (true) {
+        const { value, done: ended } = await reader.read();
+        if (ended) break;
+        buffer += value;
+        const lines = buffer.split("\n");
+        buffer = lines.pop();
+        for (const line of lines) {
+          const item = JSON.parse(line);
+          if (item.type === "delta") {
+            answer.append(document.createTextNode(item.text));
+            $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
+          }
+          if (item.type === "status") $("chat-status").textContent = item.message;
+          if (item.type === "report") $("chat-status").textContent = "Report saved · " + item.id;
+          if (item.type === "error") throw Error(item.message);
+          if (item.type === "done") done = true;
+        }
+      }
+    } finally {
+      await reader.cancel();
+    }
+    if (!done) throw Error("The response was interrupted.");
+    $("chat-status").textContent = "";
+  } catch (err) {
+    $("chat-status").textContent = err.message;
+    if (!answer.textContent) answer.remove();
+    $("chat-input").value ||= message;
+  } finally {
+    chatBusy = false;
+    $("chat-send").disabled = false;
+    $("new-chat").disabled = false;
+  }
+};
