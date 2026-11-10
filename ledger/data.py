@@ -170,30 +170,32 @@ async def snapshot(req, *, include_research_sources=True):
             ]:
                 try:
                     raw = await get(function, **params)
-                    if kind == "fundamentals" and raw.get("Symbol"):
-                        text = str(
-                            {
-                                k: raw.get(k)
-                                for k in [
-                                    "Name",
-                                    "Sector",
-                                    "MarketCapitalization",
-                                    "PERatio",
-                                    "ForwardPE",
-                                    "OperatingMarginTTM",
-                                    "QuarterlyRevenueGrowthYOY",
-                                    "LatestQuarter",
-                                ]
-                            }
-                        )
+                    if kind == "fundamentals":
+                        fields = {}
+                        for field in (
+                            "MarketCapitalization", "PERatio", "ForwardPE",
+                            "OperatingMarginTTM", "QuarterlyRevenueGrowthYOY",
+                        ):
+                            try:
+                                value = float(raw.get(field))
+                            except (TypeError, ValueError):
+                                continue
+                            if math.isfinite(value):
+                                fields[field] = value
+                        if not fields or raw.get("Symbol") != req.ticker:
+                            raise ValueError("No usable company overview metrics")
                         evidence.append(
                             dict(
                                 id=kind,
                                 kind=kind,
-                                title="Current company overview (not point-in-time)",
+                                title=f"{req.ticker} company overview",
+                                source="Alpha Vantage",
                                 url="https://www.alphavantage.co/documentation/#company-overview",
                                 published=str(req.as_of),
-                                text=text,
+                                text=str({
+                                    "LatestQuarter": raw.get("LatestQuarter"),
+                                    **fields,
+                                }),
                             )
                         )
                     if kind == "news":
@@ -208,6 +210,7 @@ async def snapshot(req, *, include_research_sources=True):
                                     id=f"news-{i}",
                                     kind=kind,
                                     title=n["title"],
+                                    source=n.get("source"),
                                     url=n.get("url"),
                                     published=published,
                                     text=n.get("summary", "")[:1800],
@@ -234,6 +237,7 @@ async def snapshot(req, *, include_research_sources=True):
                         id=f"company-news-{len(evidence)}",
                         kind="news",
                         title=article["title"],
+                        source=article["source"],
                         url=article["url"],
                         published=article["published"],
                         text=article["summary"]
@@ -251,6 +255,7 @@ async def snapshot(req, *, include_research_sources=True):
                             id=f"market-news-{len(evidence)}",
                             kind="news",
                             title=article["title"],
+                            source=source,
                             url=article["url"],
                             published=article["published"],
                             text=f"{source} market headline. Use as general context; ticker relevance is unverified.",

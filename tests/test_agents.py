@@ -79,3 +79,17 @@ def test_kronos_timeout_is_explicit(tmp_path, monkeypatch):
     monkeypatch.setattr(subprocess, "run", timeout)
     with pytest.raises(ValueError, match="process was stopped"):
         forecast_bounded([], 5, "kronos")
+
+
+def test_fundamentals_abstains_without_company_financials(monkeypatch):
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    context = {
+        "evidence": [
+            {"id": "prices", "kind": "market"},
+            {"id": "company-news-1", "kind": "news"},
+        ]
+    }
+    report = asyncio.run(analyze("fundamentals", context, "live"))
+    assert report["stance"] == "abstain"
+    assert report["evidence_ids"] == []
+    assert "no company fundamentals" in report["summary"]
