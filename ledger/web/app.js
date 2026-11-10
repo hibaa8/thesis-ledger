@@ -463,7 +463,8 @@ api("/config")
     if (e.message === "Valid bearer token required") $("auth-button").click();
   });
 
-let chatSession = localStorage.getItem("ledger-chat-session") || newChatId();
+const savedChatSession = localStorage.getItem("ledger-chat-session") || "";
+let chatSession = /^[a-f0-9]{32}$/.test(savedChatSession) ? savedChatSession : newChatId();
 let quoteTimer;
 let quoteRequest = 0;
 let chatBusy = false;
@@ -536,6 +537,10 @@ $("chat-form").onsubmit = async (e) => {
   const message = $("chat-input").value.trim();
   const ticker = $("chat-ticker").value.trim().toUpperCase();
   if (!message) return;
+  if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(ticker)) {
+    $("chat-status").textContent = "Enter a stock ticker, such as NVDA.";
+    return;
+  }
   chatBusy = true;
   $("chat-send").disabled = true;
   $("new-chat").disabled = true;
@@ -555,7 +560,14 @@ $("chat-form").onsubmit = async (e) => {
     });
     if (!response.ok) {
       const data = await response.json();
-      throw Error(typeof data.detail === "string" ? data.detail : "Check your ticker and message.");
+      if (typeof data.detail === "string") throw Error(data.detail);
+      const field = Array.isArray(data.detail) ? data.detail[0]?.loc?.at(-1) : null;
+      const validationMessages = {
+        session: "This chat session is invalid. Select New chat and resend your message.",
+        ticker: "Enter a stock ticker, such as NVDA.",
+        message: "Enter a message of up to 4,000 characters.",
+      };
+      throw Error(validationMessages[field] || "Chat could not start. Try again.");
     }
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
     let buffer = "";
