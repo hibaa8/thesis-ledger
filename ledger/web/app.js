@@ -20,7 +20,7 @@ const status = (text, error = false) => {
   $("status").textContent = text;
   $("status").classList.toggle("error", error);
 };
-async function api(path, options = {}) {
+async function apiResponse(path, options = {}) {
   const r = await fetch("/api" + path, {
     ...options,
     headers: {
@@ -29,6 +29,11 @@ async function api(path, options = {}) {
       ...options.headers,
     },
   });
+  if (r.status === 401) openAuth();
+  return r;
+}
+async function api(path, options) {
+  const r = await apiResponse(path, options);
   const data = await r.json();
   if (!r.ok)
     throw Error(
@@ -64,10 +69,12 @@ $("copy-config").onclick = async () => {
     $("copy-config").textContent = "Select and copy the configuration above";
   }
 };
-$("auth-button").onclick = () => {
+function openAuth() {
+  const dialog = $("auth-dialog");
+  if (dialog.open) return;
   $("access-token-input").value = "";
-  $("auth-dialog").showModal();
-};
+  dialog.showModal();
+}
 $("close-auth").onclick = () => $("auth-dialog").close();
 $("auth-form").onsubmit = (event) => {
   event.preventDefault();
@@ -176,6 +183,7 @@ function render() {
   $("empty").hidden = true;
   $("results").hidden = false;
   $("export").disabled = false;
+  $("export-status").textContent = "";
   $("asset-name").textContent = run.request.ticker;
   $("data-badge").textContent = run.snapshot.provider;
   $("run-date").textContent =
@@ -433,16 +441,33 @@ $("review-form").onsubmit = async (e) => {
     alert(e.message);
   }
 };
-$("export").onclick = () => {
-  const blob = new Blob([JSON.stringify(run, null, 2)], {
-      type: "application/json",
-    }),
-    url = URL.createObjectURL(blob),
-    a = document.createElement("a");
-  a.href = url;
-  a.download = `thesis-ledger-${run.request.ticker}-${run.request.as_of}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+$("export").onclick = async () => {
+  const report = run;
+  if (report?.status !== "complete") return;
+  const button = $("export");
+  const message = $("export-status");
+  button.disabled = true;
+  message.textContent = "Preparing download…";
+  try {
+    const response = await apiResponse("/runs/" + encodeURIComponent(report.id) + "/export");
+    if (!response.ok) {
+      const error = await response.json();
+      throw Error(error.detail || "The report could not be exported.");
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `thesis-ledger-${report.request.ticker}-${report.request.as_of}.zip`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    if (run === report) message.textContent = "Download started.";
+  } catch (error) {
+    if (run === report) message.textContent = error.message;
+  } finally {
+    if (run === report) button.disabled = false;
+  }
 };
 api("/config")
   .then(async (c) => {
@@ -460,7 +485,6 @@ api("/config")
   })
   .catch((e) => {
     status(e.message, true);
-    if (e.message === "Valid bearer token required") $("auth-button").click();
   });
 
 const savedChatSession = localStorage.getItem("ledger-chat-session") || "";
@@ -570,12 +594,8 @@ $("chat-form").onsubmit = async (e) => {
   };
   let done = false;
   try {
-    const response = await fetch("/api/chat", {
+    const response = await apiResponse("/chat", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: "Bearer " + token } : {}),
-      },
       body: JSON.stringify({ session: chatSession, ticker, message }),
     });
     if (!response.ok) {

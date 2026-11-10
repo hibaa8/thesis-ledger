@@ -38,7 +38,7 @@
         ><button data-page="method">↳ <span>How it works</span></button>
       </nav>
       <div class="sidebar-bottom">
-        <span class="dot"></span> Local workspace
+        <span class="dot"></span> Research workspace
         <small
           >Evidence before conviction.<br />Research before execution.</small
         >
@@ -51,10 +51,6 @@
         <div>
           <span class="muted">Workspace</span><span class="slash">/</span
           ><span id="breadcrumb">Research desk</span>
-        </div>
-        <div class="header-right">
-          <span class="chip">● &nbsp; LOCAL</span
-          ><button id="auth-button" class="quiet">Access token</button>
         </div>
       </header>
       <main id="forecast" class="page">
@@ -107,7 +103,6 @@
             <h1>Market research desk</h1>
             <p class="subtitle">Follow the session, read company news, and research any U.S. stock.</p>
           </div>
-          <button id="export" class="secondary" disabled>Export research</button>
         </div>
         <section class="market-workspace panel" aria-label="Market desk">
           <div class="intraday-panel">
@@ -240,6 +235,14 @@
             ><button data-tab="evaluation" role="tab">Forecast checks</button>
           </div>
           <section id="detail" class="panel detail"></section>
+          <section class="panel report-export" aria-labelledby="report-export-title">
+            <div>
+              <h2 id="report-export-title">Save this report</h2>
+              <p>Download the findings, source links, and supporting data as Markdown and CSV files.</p>
+              <p id="export-status" role="status"></p>
+            </div>
+            <button id="export" class="secondary" type="button">Download report ZIP</button>
+          </section>
         </div>
       </main>
       <main id="memory" class="page">

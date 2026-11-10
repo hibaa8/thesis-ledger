@@ -41,7 +41,7 @@ docker run --env-file .env \
   -v thesis-ledger-data:/data -p 127.0.0.1:8000:8000 thesis-ledger
 ```
 
-Use `https://research.your-domain.example/mcp/` in compatible clients with `Authorization: Bearer YOUR_TOKEN`. For example, set the MCP server entry to `{"url":"https://research.your-domain.example/mcp/","headers":{"Authorization":"Bearer YOUR_TOKEN"}}`. Enter that same token using **Access token** in the browser UI. The browser retains it in session storage only. Static assets and `/health` are public; research routes and MCP require the token.
+Use `https://research.your-domain.example/mcp/` in compatible clients with `Authorization: Bearer YOUR_TOKEN`. For example, set the MCP server entry to `{"url":"https://research.your-domain.example/mcp/","headers":{"Authorization":"Bearer YOUR_TOKEN"}}`. Enter that same token when the browser shows **Unlock Thesis Ledger**. The browser retains it in session storage only. Static assets and `/health` are public; research routes and MCP require the token.
 
 This is a **single-user trust boundary**. Anyone with the token can read all research, create paid runs, and review memories. Before offering a public multi-user product, add user accounts, OAuth-compatible MCP authorization, tenant-isolated databases, quotas, a durable queue, audit retention, and an explicit data-provider redistribution policy. Do not market this shared-token prototype as a multi-tenant service.
 
@@ -51,7 +51,7 @@ Back up SQLite using its backup API or while the service is stopped; copying onl
 
 ## Free deployment on Render
 
-For the fastest setup, create a **Blueprint** in Render from this repository and select the branch containing `render.yaml`. It provisions a free Docker web service, generates the dashboard access token, and prompts for OpenAI, Alpha Vantage, and Alpaca credentials. Get the generated `LEDGER_API_TOKEN` from the service's Environment page and enter it using **Access token** in Thesis Ledger. Render provides the allowed hostname automatically.
+For the fastest setup, create a **Blueprint** in Render from this repository and select the branch containing `render.yaml`. It provisions a free Docker web service, generates the dashboard access token, and prompts for OpenAI, Alpha Vantage, and Alpaca credentials. Get the generated `LEDGER_API_TOKEN` from the service's Environment page and enter it when Thesis Ledger prompts you to unlock the workspace. Render provides the allowed hostname automatically.
 
 To configure the service without a Blueprint:
 
@@ -61,7 +61,7 @@ I use a single Docker web service for the UI, chat API, and HTTP MCP. In Render,
 - `LEDGER_API_TOKEN` to a random secret of at least 32 characters.
 - `OPENAI_KEY` and `ALPHA_VANTAGE` to the provider keys. Set Alpaca credentials or Alpha Vantage real-time entitlement only if available.
 
-Open the service URL and enter the access token from the dashboard's **Access token** button. Use the service URL plus `/mcp/` for clients that accept custom bearer headers. The service is single-user. Anyone who has the token shares the same database and provider quotas.
+Open the service URL and enter the token when prompted to unlock Thesis Ledger. Use the service URL plus `/mcp/` for clients that accept custom bearer headers. The service is single-user. Anyone who has the token shares the same database and provider quotas.
 
 SEC EDGAR provides company financials when the Alpha Vantage overview is unavailable. It needs no API key. Set `LEDGER_SEC_USER_AGENT` to a project name and contact email to identify requests for your deployment.
 
