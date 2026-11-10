@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 from fastapi import HTTPException
 
 
-COOKIE = "ledger-visitor"
+COOKIE = "ledger-guest"
 # Per browser and across the deployment, respectively.
 LIMITS = {
     "research": (3, 30),

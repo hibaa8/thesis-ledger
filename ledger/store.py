@@ -102,6 +102,9 @@ class Store:
     def for_visitor(self, visitor):
         return Store(self.path.parent / "visitors" / visitor)
 
+    def for_account(self, account):
+        return Store(self.path.parent / "accounts" / account)
+
     def connect(self):
         db = sqlite3.connect(self.path, timeout=20)
         db.row_factory = sqlite3.Row

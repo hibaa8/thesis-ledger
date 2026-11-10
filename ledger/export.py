@@ -42,7 +42,7 @@ def source_link(item):
     return title
 
 
-def research_archive(run):
+def report_parts(run):
     request = run["request"]
     snapshot = run["snapshot"]
     forecast = run["forecast"]
@@ -50,6 +50,11 @@ def research_archive(run):
     reports = [{"stage": "conclusion", **run["decision"]}] + [
         {"stage": stage, **report} for stage, report in run["reports"].items()
     ]
+    return request, snapshot, forecast, evidence, reports
+
+
+def research_markdown(run):
+    request, snapshot, forecast, evidence, reports = report_parts(run)
     lines = [
         f"# {request['ticker']} research report",
         "",
@@ -61,6 +66,16 @@ def research_archive(run):
         f"**Research question:** {markdown_text(request['question'])}",
         "",
     ]
+    metrics = run["metrics"]
+    lines.extend([
+        "## Key numbers", "",
+        f"- Last observed close: ${metrics['last']:,.2f}",
+        f"- Change from prior close: {metrics['change']:+.2f}%",
+        f"- 20-session momentum: {metrics['momentum']:+.2f}%",
+        f"- Annualized volatility: {metrics['volatility']:.1f}%",
+        f"- Scenario median return: {forecast['expected_return']:+.2f}%",
+        "",
+    ])
     for report in reports:
         stage = report["stage"].replace("-", " ").title()
         lines.extend([
@@ -87,15 +102,14 @@ def research_archive(run):
     lines.extend(["", "## Forecast and limitations", "", markdown_text(forecast["label"]), "",
                   markdown_text(forecast["disclaimer"]), ""])
     lines.extend(f"- {markdown_text(warning)}" for warning in snapshot["warnings"])
-    lines.extend([
-        "", "## Included data", "",
-        "- Analyst reports, debate, risk review, and the final conclusion",
-        "- Source evidence, observed prices, forecast ranges, forecast checks, and the harness trace",
-        "",
-    ])
+    return "\n".join(lines) + "\n"
+
+
+def research_archive(run):
+    _, snapshot, forecast, evidence, reports = report_parts(run)
     archive = BytesIO()
     with ZipFile(archive, "w", compression=ZIP_DEFLATED) as zipped:
-        zipped.writestr("report.md", "\n".join(lines))
+        zipped.writestr("report.md", research_markdown(run))
         tables = [
             ("reports", reports, ("stage", "role", "stance", "summary", "invalidation", "risks", "evidence_ids")),
             ("evidence", evidence.values(), ("id", "kind", "source", "title", "published", "url", "text")),

@@ -211,3 +211,39 @@ def test_public_mcp_exposes_only_market_tools(tmp_path, monkeypatch):
         assert "research_ticker" in {tool["name"] for tool in owner.json()["result"]["tools"]}
         monkeypatch.delenv("LEDGER_PUBLIC")
         assert client.post("/mcp/public/", json=request, headers=headers).status_code == 404
+
+
+def test_account_report_reopens_after_new_session_and_is_private(tmp_path, monkeypatch):
+    from ledger.auth import AccountAuth, SESSION
+
+    monkeypatch.setenv("LEDGER_PUBLIC", "1")
+    monkeypatch.setenv("LEDGER_API_TOKEN", "owner-test-token")
+
+    async def verify(self, token):
+        return {"alice": "a" * 32, "alice-again": "a" * 32, "bob": "b" * 32}.get(token)
+
+    monkeypatch.setattr(AccountAuth, "account", verify)
+    fixture = {"ticker": "NVDA", "mode": "demo"}
+    with TestClient(create_app(tmp_path), cookies={SESSION: "alice"}) as alice:
+        run = alice.post("/api/research", json=fixture).json()
+        assert run["status"] == "complete"
+    path = "/api/runs/" + run["id"]
+    with TestClient(create_app(tmp_path), cookies={SESSION: "alice-again"}) as alice:
+        assert alice.get("/api/memories").json()[0]["run_id"] == run["id"]
+        assert alice.get(path).json()["reports"] == run["reports"]
+        report = alice.get(path + "/export?format=md")
+        assert report.status_code == 200
+        assert "text/markdown" in report.headers["content-type"]
+        assert "## Key numbers" in report.text
+        assert "## Fundamentals" in report.text
+        assert "## Bull" in report.text
+        alice.cookies.clear()
+        alice.cookies.set(SESSION, "alice-again", domain="testserver.local", path="/")
+        assert alice.get(path).status_code == 200
+        alice.post("/api/auth/logout")
+        assert alice.get(path).status_code == 404
+    for cookies in ({SESSION: "bob"}, {SESSION: "forged"}, {}):
+        with TestClient(create_app(tmp_path), cookies=cookies) as other:
+            assert other.get("/api/memories").json() == []
+            assert other.get(path).status_code == 404
+            assert other.get(path + "/export?format=md").status_code == 404

@@ -17,7 +17,10 @@ class PostgresStore:
         self.workspace = workspace
 
     def for_visitor(self, visitor):
-        return PostgresStore(self.local.for_visitor(visitor), self.url, f"visitor:{visitor}")
+        return self.local.for_visitor(visitor)
+
+    def for_account(self, account):
+        return PostgresStore(self.local.for_account(account), self.url, f"account:{account}")
 
     def connect(self):
         return self.local.connect()

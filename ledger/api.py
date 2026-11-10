@@ -1,13 +1,14 @@
 import asyncio
 import hmac
 import os
+from typing import Literal
 
 import httpx
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlparse
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from .harness import Harness
@@ -22,7 +23,8 @@ from pydantic import BaseModel, Field
 from .chat import Chat
 from .data import snapshot
 from .forecast import forecast_bounded
-from .export import research_archive
+from .export import research_archive, research_markdown
+from .auth import AccountAuth, CALLBACK, SESSION, VERIFIER
 from .public import COOKIE, charge, visitor_cookie
 from .market import MarketBrief
 from .quotes import Quotes, quote_interval
@@ -39,6 +41,7 @@ class ChatRequest(BaseModel):
 def create_app(directory=None):
     load_config()
     store = open_store(directory)
+    auth = AccountAuth()
     harness = Harness(store)
     quotes = Quotes()
     market = MarketBrief(quotes)
@@ -72,6 +75,7 @@ def create_app(directory=None):
         cookie = None
         is_public_mcp = path == "/mcp/public/"
         request.state.visitor = None
+        request.state.account = None
         if path.startswith(("/api/", "/mcp")):
             authorized = token and hmac.compare_digest(
                 request.headers.get("authorization", ""), f"Bearer {token}"
@@ -81,7 +85,17 @@ def create_app(directory=None):
                 return JSONResponse({"detail": "Workspace access is not configured."}, status_code=503)
             if is_public_mcp and not public_enabled:
                 return JSONResponse({"detail": "Not found"}, status_code=404)
-            if is_public_mcp or (token and not authorized):
+            if not authorized and path.startswith((
+                "/api/config", "/api/research", "/api/dashboard", "/api/runs",
+                "/api/memories", "/api/chat",
+            )):
+                try:
+                    request.state.account = await auth.account(request.cookies.get(SESSION))
+                except HTTPException as error:
+                    return JSONResponse({"detail": error.detail}, status_code=error.status_code)
+            if request.state.account:
+                request.state.visitor = "account:" + request.state.account
+            elif is_public_mcp or (token and not authorized):
                 if public_enabled and (is_public_mcp or path.startswith("/api/")):
                     request.state.visitor, cookie = visitor_cookie(
                         request.cookies.get(COOKIE, ""), token
@@ -106,11 +120,10 @@ def create_app(directory=None):
             )
         if request.state.visitor:
             response.headers["Cache-Control"] = "private, no-store"
-        if cookie:
+        if cookie and path != "/api/auth/logout":
             response.set_cookie(
                 COOKIE, cookie, httponly=True, samesite="lax",
                 secure=request.url.scheme == "https" or bool(os.getenv("RENDER")),
-                max_age=365 * 86400,
             )
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Content-Security-Policy"] = (
@@ -120,6 +133,8 @@ def create_app(directory=None):
 
     def visitor_store(request):
         visitor = request.state.visitor
+        if account := request.state.account:
+            return store.for_account(account)
         return store.for_visitor(visitor) if visitor else store
 
     def visitor_harness(request):
@@ -137,6 +152,22 @@ def create_app(directory=None):
     async def missing(request, exc):
         return JSONResponse({"detail": "Not found"}, status_code=404)
 
+    @app.get("/auth/google")
+    def google_sign_in():
+        return auth.start()
+
+    @app.get(CALLBACK)
+    async def auth_callback(request: Request, code: str = ""):
+        return await auth.finish(code, request.cookies.get(VERIFIER))
+
+    @app.post("/api/auth/logout")
+    def sign_out():
+        response = RedirectResponse("/", 303)
+        response.delete_cookie(SESSION)
+        response.delete_cookie(COOKIE)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     @app.get("/health")
     def health():
         return {"status": "ok", "version": "0.1.0"}
@@ -148,6 +179,8 @@ def create_app(directory=None):
     def config(request: Request):
         return dict(
             public_visitor=bool(request.state.visitor),
+            signed_in=bool(request.state.account),
+            google_sign_in=auth.enabled,
             alpaca_ready=alpaca_ready(),
             live_ready=bool(
                 os.getenv("LLM_API_KEY")
@@ -218,15 +251,15 @@ def create_app(directory=None):
         return visitor_store(request).get(run_id)
 
     @app.get("/api/runs/{run_id}/export")
-    def export_run(run_id: str, request: Request):
+    def export_run(run_id: str, request: Request, format: Literal["zip", "md"] = "zip"):
         report = visitor_store(request).get(run_id)
         if report["status"] != "complete":
             raise HTTPException(409, "Complete the research run before exporting.")
         req = ResearchRequest.model_validate(report["request"])
-        filename = f"thesis-ledger-{req.ticker}-{req.as_of}.zip"
+        filename = f"thesis-ledger-{req.ticker}-{req.as_of}.{format}"
         return Response(
-            research_archive(report),
-            media_type="application/zip",
+            research_markdown(report) if format == "md" else research_archive(report),
+            media_type="text/markdown" if format == "md" else "application/zip",
             headers={
                 "Content-Disposition": f'attachment; filename="{filename}"',
                 "Cache-Control": "no-store",
