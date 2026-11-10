@@ -1004,11 +1004,48 @@ dialog select {
 .chat-toolbar, .chat-form { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .chat-toolbar input { width: 7rem; }
 .quote-card { padding: 12px; margin: 12px 0; border: 1px solid #355052; border-radius: 8px; }
-#chat .chat-panel { max-width: none; }
+body:has(#chat.active) {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+body:has(#chat.active) > .workspace {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.workspace:has(#chat.active) > header { flex-shrink: 0; }
+.workspace:has(#chat.active) > footer { display: none; }
+#chat.active {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  padding-block: clamp(12px, 3dvh, 30px);
+}
+#chat .subtitle { margin-bottom: clamp(10px, 2dvh, 24px); }
+#chat .chat-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  max-width: none;
+}
+#chat .chat-panel > :not(.chat-messages) { flex-shrink: 0; }
 .chat-messages {
-  height: clamp(320px, 70dvh, 1050px);
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   padding: 4px;
+}
+#chat-input { max-height: 24dvh; }
+#chat-status:empty { display: none; }
+@media (max-height: 620px) {
+  #chat > :is(.eyebrow, .subtitle) { display: none; }
+  #chat h1 { margin-bottom: 10px; }
 }
 .chat-message { padding: 12px 14px; margin: 10px 0; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 10px; background: #222a33; }
 .chat-message.user { margin-left: 15%; background: #203d3b; }

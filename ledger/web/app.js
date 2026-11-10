@@ -555,8 +555,9 @@ function chatBubble(role, text) {
   node.className = "chat-message " + role;
   if (role === "assistant") renderChatAnswer(node, text);
   else node.textContent = text;
-  $("chat-messages").append(node);
-  node.scrollIntoView({ block: "nearest" });
+  const messages = $("chat-messages");
+  messages.append(node);
+  messages.scrollTop = messages.scrollHeight;
   return node;
 }
 
