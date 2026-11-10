@@ -1,0 +1,442 @@
+const $ = (id) => document.getElementById(id);
+const esc = (s) =>
+  String(s ?? "").replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
+  );
+let run = null,
+  range = 40,
+  tab = "debate",
+  token = sessionStorage.getItem("ledger-token") || "";
+const fmt = (n, d = 2) =>
+  Number(n).toLocaleString("en-US", {
+    minimumFractionDigits: d,
+    maximumFractionDigits: d,
+  });
+const status = (text, error = false) => {
+  $("status").textContent = text;
+  $("status").classList.toggle("error", error);
+};
+async function api(path, options = {}) {
+  const r = await fetch("/api" + path, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: "Bearer " + token } : {}),
+      ...options.headers,
+    },
+  });
+  const data = await r.json();
+  if (!r.ok)
+    throw Error(
+      typeof data.detail === "string"
+        ? data.detail
+        : JSON.stringify(data.detail),
+    );
+  return data;
+}
+const localDate = new Date().toLocaleDateString("en-CA");
+$("asof").value = localDate;
+$("asof").max = localDate;
+const config = {
+  mcpServers: {
+    "thesis-ledger": {
+      command: "uv",
+      args: [
+        "--directory",
+        "/Users/admin/Documents/thesis-ledger",
+        "run",
+        "thesis-ledger-mcp",
+      ],
+    },
+  },
+};
+$("mcp-config").textContent = JSON.stringify(config, null, 2);
+$("mcp-url").textContent = location.origin + "/mcp/";
+$("copy-config").onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(config, null, 2));
+    $("copy-config").textContent = "Copied";
+  } catch {
+    $("copy-config").textContent = "Select and copy the configuration above";
+  }
+};
+$("auth-button").onclick = () => {
+  const v = prompt(
+    "Access token for this server (stored for this tab only)",
+    token,
+  );
+  if (v !== null) {
+    token = v;
+    sessionStorage.setItem("ledger-token", v);
+    status("Access token updated.");
+  }
+};
+async function page(name) {
+  document
+    .querySelectorAll(".page")
+    .forEach((el) => el.classList.toggle("active", el.id === name));
+  document
+    .querySelectorAll("[data-page]")
+    .forEach((el) => el.classList.toggle("active", el.dataset.page === name));
+  $("breadcrumb").textContent = {
+    research: "Research desk",
+    memory: "Thesis ledger",
+    runs: "Research history",
+    connect: "Connect via MCP",
+    method: "How it works",
+  }[name];
+  try {
+    if (name === "memory") await loadMemory();
+    if (name === "runs") await loadRuns();
+  } catch (e) {
+    const target = name === "memory" ? "memory-list" : "run-list";
+    $(target).textContent = e.message;
+  }
+}
+document
+  .querySelectorAll("[data-page]")
+  .forEach((b) => (b.onclick = () => page(b.dataset.page)));
+$("sample").onclick = () => {
+  $("mode").value = "demo";
+  $("engine").value = "bootstrap";
+  $("ticker").value = "NVDA";
+  $("research-form").requestSubmit();
+};
+$("mode").onchange = () =>
+  status(
+    $("mode").value === "demo"
+      ? "Demo uses synthetic prices and scripted reports."
+      : "Live mode requires configured market and model credentials. Daily data may be delayed.",
+  );
+$("research-form").onsubmit = async (e) => {
+  e.preventDefault();
+  $("run-button").disabled = true;
+  $("run-button").classList.add("loading");
+  $("run-button").textContent = "Researching…";
+  status(
+    "Gathering evidence → independent analysts → bull / bear debate → risk review. Completed stages are saved.",
+  );
+  try {
+    const request = {
+      ticker: $("ticker").value.toUpperCase(),
+      as_of: $("asof").value,
+      horizon: +$("horizon").value,
+      mode: $("mode").value,
+      forecast: $("engine").value,
+      use_memory: $("use-memory").checked,
+    };
+    if ($("question").value.trim())
+      request.question = $("question").value.trim();
+    const result = await api("/research", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    if (result.status === "failed") {
+      status(result.error + " Open Research history to resume.", true);
+    } else {
+      run = result;
+      render();
+      status(
+        run.request.mode === "demo"
+          ? "SYNTHETIC DEMO · Prices, company facts, and analyst reports are illustrative."
+          : run.snapshot.warnings.join(" "),
+      );
+    }
+  } catch (err) {
+    status(err.message, true);
+  } finally {
+    $("run-button").disabled = false;
+    $("run-button").classList.remove("loading");
+    $("run-button").textContent = "Run research ↗";
+  }
+};
+function cites(ids) {
+  return (
+    '<div class="citations">' +
+    ids.map((id) => '<span class="citation">' + esc(id) + "</span>").join("") +
+    "</div>"
+  );
+}
+function render() {
+  $("empty").hidden = true;
+  $("results").hidden = false;
+  $("export").disabled = false;
+  $("asset-name").textContent = run.request.ticker;
+  $("data-badge").textContent =
+    run.request.mode === "demo" ? "SYNTHETIC DEMO" : run.snapshot.provider;
+  $("run-date").textContent =
+    "As of " +
+    run.request.as_of +
+    " · " +
+    run.request.horizon +
+    " session horizon";
+  const m = run.metrics;
+  const stats = [
+    [
+      "LAST OBSERVED CLOSE",
+      "$" + fmt(m.last),
+      fmt(m.change) + "% vs prior close",
+    ],
+    [
+      "20-SESSION MOMENTUM",
+      (m.momentum >= 0 ? "+" : "") + fmt(m.momentum) + "%",
+      m.regime + " · observed series",
+    ],
+    [
+      "ANNUALIZED VOLATILITY",
+      fmt(m.volatility, 1) + "%",
+      "Historical log returns · 252 sessions",
+    ],
+    [
+      "SCENARIO MEDIAN",
+      (run.forecast.expected_return >= 0 ? "+" : "") +
+        fmt(run.forecast.expected_return) +
+        "%",
+      "Uncalibrated · " + run.request.horizon + " sessions",
+    ],
+  ];
+  $("stats").innerHTML = stats
+    .map(
+      ([a, b, c]) =>
+        `<div class="stat"><small>${esc(a)}</small><strong>${esc(b)}</strong><span>${esc(c)}</span></div>`,
+    )
+    .join("");
+  $("forecast-label").textContent = run.forecast.label;
+  $("forecast-note").textContent = run.forecast.disclaimer;
+  $("decision").innerHTML =
+    `<span class="verdict">${run.decision.stance === "abstain" ? "ABSTAIN / KEEP RESEARCHING" : esc(run.decision.stance.toUpperCase())}</span><p>${esc(run.decision.summary)}</p>${run.disagreement ? '<div class="info">Forecast and research direction disagree.</div>' : ""}<div class="invalidation"><strong>WHAT WOULD CHANGE THE THESIS</strong>${esc(run.decision.invalidation)}</div><div class="invalidation"><strong>RISK REVIEW</strong>${esc(run.reports.risk.summary)}</div>`;
+  const names = {
+    technical: "Technical analyst",
+    fundamentals: "Fundamentals analyst",
+    news: "News & catalysts",
+    sentiment: "Sentiment analyst",
+  };
+  $("analysts").innerHTML = Object.entries(names)
+    .map(([key, name], i) => {
+      const r = run.reports[key];
+      return `<article class="analyst"><div class="analyst-top"><span class="agent-icon">0${i + 1}</span><span class="stance ${esc(r.stance)}">${esc(r.stance)}</span></div><h3>${name}</h3><p>${esc(r.summary)}</p>${cites(r.evidence_ids)}</article>`;
+    })
+    .join("");
+  $("call-count").textContent =
+    run.calls +
+    " " +
+    (run.request.mode === "demo" ? "SCRIPTED STAGES" : "MODEL ATTEMPTS") +
+    " · " +
+    run.memories.length +
+    " MEMORIES";
+  chart();
+  details();
+}
+function chart() {
+  const bars = run.snapshot.bars.slice(-range),
+    f = run.forecast.points,
+    all = [...bars.map((b) => b.close), ...f.flatMap((p) => [p.low, p.high])];
+  let lo = Math.min(...all) * 0.98,
+    hi = Math.max(...all) * 1.02;
+  const W = 800,
+    H = 270,
+    left = 12,
+    right = 65,
+    top = 15,
+    bottom = 32,
+    n = bars.length + f.length;
+  const x = (i) => left + (i / (n - 1)) * (W - left - right),
+    y = (v) => top + ((hi - v) / (hi - lo)) * (H - top - bottom),
+    path = (pts) =>
+      pts
+        .map((p, i) => (i ? "L" : "M") + p.map((v) => v.toFixed(2)).join(","))
+        .join(" ");
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Observed closing prices and forecast scenario range"><defs><linearGradient id="fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#83e0bd" stop-opacity=".12"/><stop offset="1" stop-color="#83e0bd" stop-opacity="0"/></linearGradient></defs>`;
+  for (let i = 0; i < 5; i++) {
+    const v = lo + ((hi - lo) * i) / 4;
+    svg += `<line x1="${left}" y1="${y(v)}" x2="${W - right}" y2="${y(v)}" stroke="#263037" stroke-dasharray="3 5"/><text x="${W - right + 12}" y="${y(v) + 4}" fill="#7e8e98" font-size="10" font-family="monospace">${fmt(v)}</text>`;
+  }
+  const history = bars.map((b, i) => [x(i), y(b.close)]),
+    last = history.at(-1),
+    med = [last, ...f.map((p, i) => [x(bars.length + i), y(p.median)])];
+  const band = [
+    last,
+    ...f.map((p, i) => [x(bars.length + i), y(p.high)]),
+    ...f.map((p, i) => [x(bars.length + i), y(p.low)]).reverse(),
+  ];
+  svg += `<path d="${path(history)} L${last[0]},${H - bottom} L${left},${H - bottom} Z" fill="url(#fill)"/><path d="${path(band)} Z" fill="#b7a0f4" opacity=".13"/><line x1="${last[0]}" x2="${last[0]}" y1="${top}" y2="${H - bottom}" stroke="#73877e" stroke-dasharray="3 4"/><path d="${path(history)}" fill="none" stroke="#83e0bd" stroke-width="2"/><path d="${path(med)}" fill="none" stroke="#b7a0f4" stroke-width="2" stroke-dasharray="5 4"/>`;
+  [0, Math.floor(bars.length / 2), bars.length - 1, n - 1].forEach((i) => {
+    const d = i < bars.length ? bars[i].date : f.at(-1).date;
+    svg += `<text x="${x(i)}" y="${H - 7}" text-anchor="${i === 0 ? "start" : i === n - 1 ? "end" : "middle"}" fill="#7e8e98" font-size="10" font-family="monospace">${esc(d.slice(5))}</text>`;
+  });
+  bars.forEach((b, i) => {
+    svg += `<circle cx="${x(i)}" cy="${y(b.close)}" r="6" fill="transparent"><title>${esc(b.date)} · Close $${fmt(b.close)} · Volume ${fmt(b.volume, 0)}</title></circle>`;
+  });
+  f.forEach((p, i) => {
+    svg += `<circle cx="${x(bars.length + i)}" cy="${y(p.median)}" r="6" fill="transparent"><title>${esc(p.date)} · Median $${fmt(p.median)} · Range $${fmt(p.low)}–$${fmt(p.high)}</title></circle>`;
+  });
+  $("chart").innerHTML = svg + "</svg>";
+}
+document.querySelectorAll("[data-range]").forEach(
+  (b) =>
+    (b.onclick = () => {
+      range = +b.dataset.range;
+      document
+        .querySelectorAll("[data-range]")
+        .forEach((v) => v.classList.toggle("active", v === b));
+      if (run) chart();
+    }),
+);
+document.querySelectorAll("[data-tab]").forEach(
+  (b) =>
+    (b.onclick = () => {
+      tab = b.dataset.tab;
+      document.querySelectorAll("[data-tab]").forEach((v) => {
+        v.classList.toggle("active", v === b);
+        v.setAttribute("aria-selected", String(v === b));
+      });
+      details();
+    }),
+);
+function details() {
+  if (!run) return;
+  let html = "";
+  if (tab === "debate") {
+    html =
+      '<div class="debate-grid">' +
+      Object.entries(run.reports)
+        .filter(([k]) => k.startsWith("bull-") || k.startsWith("bear-"))
+        .map(
+          ([k, r]) =>
+            `<article class="debate-card ${k.startsWith("bear") ? "bear" : ""}"><span class="tiny">${esc(k.toUpperCase())}</span><p>${esc(r.summary)}</p>${cites(r.evidence_ids)}<p><strong>Invalidation:</strong> ${esc(r.invalidation)}</p></article>`,
+        )
+        .join("") +
+      "</div>";
+  } else if (tab === "evidence") {
+    html = run.snapshot.evidence
+      .map((e) => {
+        let link = "";
+        try {
+          if (e.url && ["https:", "http:"].includes(new URL(e.url).protocol))
+            link = `<a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>`;
+        } catch {}
+        return `<div class="evidence-item"><span class="tiny">${esc(e.id)} · ${esc(e.published)}</span><h3>${esc(e.title)}</h3><p>${esc(e.text)}</p>${link}</div>`;
+      })
+      .join("");
+  } else if (tab === "trace") {
+    html = run.trace
+      .map(
+        (t) =>
+          `<div class="trace-row"><time>${esc(t.at.slice(11, 19))}</time><strong>${esc(t.stage)}</strong><span>${esc(t.detail)}</span></div>`,
+      )
+      .join("");
+  } else {
+    const e = run.evaluation;
+    html = `<h2>Rolling-origin forecast diagnostic</h2><p>${esc(e.note)} The diagnostic evaluates the bootstrap baseline, even when the displayed scenario uses Kronos.</p><div class="stats">${[
+      ["TEST WINDOWS", e.windows],
+      ["BOOTSTRAP MAPE", fmt(e.bootstrap_mape) + "%"],
+      ["NO-CHANGE MAPE", fmt(e.naive_mape) + "%"],
+      ["SCENARIO COVERAGE", fmt(e.scenario_coverage, 1) + "%"],
+    ]
+      .map(
+        ([a, b]) =>
+          `<div class="stat"><small>${a}</small><strong>${b}</strong></div>`,
+      )
+      .join(
+        "",
+      )}</div><p>Each window sees only preceding bars. Overlapping outcomes and a small sample limit interpretation. Synthetic demo results are not evidence about real markets.</p>`;
+  }
+  $("detail").innerHTML = html;
+}
+async function loadRuns() {
+  const runs = await api("/runs");
+  $("run-list").innerHTML = runs.length
+    ? runs
+        .map(
+          (r) =>
+            `<div class="history-row panel"><strong>${esc(r.request.ticker)}</strong><span class="chip">${esc(r.status)}</span><small>${esc(r.request.as_of)} · ${esc(r.request.mode)} · ${r.request.horizon} sessions</small><button class="secondary" data-open-run="${esc(r.id)}">${r.status === "complete" ? "Open report ↗" : "Resume run ↗"}</button></div>`,
+        )
+        .join("")
+    : '<div class="empty">No runs yet. Start at the research desk.</div>';
+  document.querySelectorAll("[data-open-run]").forEach(
+    (b) =>
+      (b.onclick = async () => {
+        b.disabled = true;
+        try {
+          let r = await api("/runs/" + b.dataset.openRun);
+          if (r.status !== "complete")
+            r = await api("/runs/" + b.dataset.openRun + "/resume", {
+              method: "POST",
+            });
+          if (r.status !== "complete") throw Error(r.error);
+          run = r;
+          await page("research");
+          render();
+          status(
+            run.request.mode === "demo"
+              ? "Viewing a saved synthetic demo."
+              : "Viewing saved research; source data has not been refreshed.",
+          );
+        } catch (e) {
+          b.textContent = e.message;
+        } finally {
+          b.disabled = false;
+        }
+      }),
+  );
+}
+async function loadMemory() {
+  const memories = await api("/memories");
+  $("memory-list").innerHTML = memories.length
+    ? memories
+        .map(
+          (m) =>
+            `<article class="panel memory-card"><div class="top"><strong>${esc(m.ticker)}</strong><span class="chip">${esc(m.mode)}</span><span class="tiny">${esc(m.as_of)}</span><button class="secondary" data-review="${esc(m.id)}">Review memory ↗</button></div><p>${esc(m.body.thesis)}</p><p><strong>Scope:</strong> ${esc(m.body.scope)}</p><p><strong>Invalidation:</strong> ${esc(m.body.invalidation)}</p>${cites(m.body.evidence_ids)}${m.revisions.map((r) => `<p class="revision">${esc(r.created.slice(0, 10))} · ${esc(r.scope)}<br>${esc(r.feedback)}</p>`).join("")}</article>`,
+        )
+        .join("")
+    : '<div class="empty">Your ledger is empty. Completed research runs create compact memories here.</div>';
+  document.querySelectorAll("[data-review]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        $("review-id").value = b.dataset.review;
+        $("feedback").value = "";
+        $("review-dialog").showModal();
+      }),
+  );
+}
+$("close-review").onclick = () => $("review-dialog").close();
+$("review-form").onsubmit = async (e) => {
+  e.preventDefault();
+  try {
+    await api("/memories/review", {
+      method: "POST",
+      body: JSON.stringify({
+        memory_id: $("review-id").value,
+        feedback: $("feedback").value,
+        scope: $("scope").value,
+      }),
+    });
+    $("review-dialog").close();
+    await loadMemory();
+  } catch (e) {
+    alert(e.message);
+  }
+};
+$("export").onclick = () => {
+  const blob = new Blob([JSON.stringify(run, null, 2)], {
+      type: "application/json",
+    }),
+    url = URL.createObjectURL(blob),
+    a = document.createElement("a");
+  a.href = url;
+  a.download = `thesis-ledger-${run.request.ticker}-${run.request.as_of}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+api("/config")
+  .then((c) => {
+    if (!c.live_ready)
+      $("mode").options[1].textContent = "Live (setup required)";
+    if (!c.kronos_configured)
+      $("engine").options[1].textContent = "Kronos (setup required)";
+  })
+  .catch((e) => status(e.message, true));
