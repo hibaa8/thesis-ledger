@@ -13,6 +13,7 @@ dev = ["pytest>=8,<10"]
 [project.scripts]
 thesis-ledger = "ledger.cli:main"
 thesis-ledger-mcp = "ledger.mcp_server:main"
+thesis-ledger-trader-mcp = "ledger.trader_mcp:main"
 [tool.setuptools]
 packages = ["ledger"]
 [tool.setuptools.package-data]

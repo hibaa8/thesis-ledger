@@ -34,6 +34,10 @@ class PostgresStore:
     def save_chat(self, session, question, answer):
         self.local.save_chat(session, question, answer)
 
+    def reserve_trade_proposal(self, proposal, daily_limit_cents):
+        # The trading MCP is local-only; keep its budget ledger off the public site.
+        return self.local.reserve_trade_proposal(proposal, daily_limit_cents)
+
     def cached_forecast(self, key):
         return self.local.cached_forecast(key)
 

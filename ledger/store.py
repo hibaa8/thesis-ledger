@@ -8,6 +8,15 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
+
+
+MARKET_TZ = ZoneInfo("America/New_York")
+
+
+def market_date(timestamp):
+    """Date an item became available in the US market's local time zone."""
+    return datetime.fromisoformat(timestamp.replace("Z", "+00:00")).astimezone(MARKET_TZ).date().isoformat()
 
 
 def now():
@@ -34,14 +43,14 @@ def rank_memories(rows, revisions, ticker, mode, as_of, query, limit):
         if ticker and m["ticker"] != ticker or mode and m["mode"] != mode:
             continue
         # Both availability and market date matter. A retrospective run is not old knowledge.
-        if as_of and (m["as_of"] > as_of or m["created"][:10] > as_of):
+        if as_of and (m["as_of"] > as_of or market_date(m["created"]) > as_of):
             continue
         m["body"] = json.loads(m["body"])
         m["revisions"] = [
             r
             for r in revisions
             if r["memory_id"] == m["id"]
-            and (not as_of or r["created"][:10] <= as_of)
+            and (not as_of or market_date(r["created"]) <= as_of)
         ]
         if m["revisions"]:
             m["scope"] = m["revisions"][-1]["scope"]
@@ -97,6 +106,10 @@ class Store:
                 mode TEXT, as_of TEXT, created TEXT, body TEXT, digest TEXT);
             CREATE TABLE IF NOT EXISTS revisions(id TEXT PRIMARY KEY, memory_id TEXT, created TEXT,
                 scope TEXT, feedback TEXT);
+            CREATE TABLE IF NOT EXISTS trade_proposals(
+                id TEXT PRIMARY KEY, run_id TEXT NOT NULL UNIQUE, created TEXT NOT NULL,
+                trade_date TEXT NOT NULL, notional_cents INTEGER NOT NULL,
+                payload TEXT NOT NULL);
             """)
 
     def for_visitor(self, visitor):
@@ -123,6 +136,32 @@ class Store:
         if not row:
             raise KeyError("Run not found")
         return json.loads(row[0])
+
+    def reserve_trade_proposal(self, proposal, daily_limit_cents):
+        """Atomically reserve a daily proposal budget; proposals are never orders."""
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            existing = db.execute(
+                "SELECT payload FROM trade_proposals WHERE run_id=?", (proposal["run_id"],)
+            ).fetchone()
+            if existing:
+                saved = json.loads(existing[0])
+                if saved["notional_cents"] != proposal["notional_cents"]:
+                    raise ValueError("This research run already has a proposal for a different amount")
+                return saved
+            used = db.execute(
+                "SELECT COALESCE(SUM(notional_cents),0) FROM trade_proposals WHERE trade_date=?",
+                (proposal["trade_date"],),
+            ).fetchone()[0]
+            if used + proposal["notional_cents"] > daily_limit_cents:
+                raise ValueError("Daily trade proposal limit reached")
+            db.execute(
+                "INSERT INTO trade_proposals VALUES(?,?,?,?,?,?)",
+                (proposal["id"], proposal["run_id"], proposal["created"],
+                 proposal["trade_date"], proposal["notional_cents"],
+                 json.dumps(proposal, allow_nan=False)),
+            )
+            return proposal
 
     def runs(self):
         with self.connect() as db:

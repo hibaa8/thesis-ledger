@@ -68,6 +68,10 @@ The hosted app exposes public market tools at `/mcp/public/`. The full toolkit i
 
 See [research notes](docs/research.md) for the adaptations and [evaluation notes](docs/evaluation.md) for validation limits. Run the local test suite with `uv run pytest -q`.
 
+## Approval-gated trade planning
+
+The optional local trader MCP converts fresh live research into a bounded stock or ETF order proposal ($25 per trade, $100 per day). Brokerage execution is handled through Robinhood's official Trading MCP with **Trade approvals on**, so the account holder reviews and places each proposed order in the Robinhood app. The public site and research MCP do not expose order tools. See [setup and review sequence](docs/trading.md).
+
 The Market desk shows a curated watchlist of index ETFs and large-cap stocks. Select a row or enter another U.S. ticker to change the chart, company headlines, and report. With Alpaca configured, the chart shows five-minute candles for the most recent regular trading session with bars. Company headlines also feed into newly generated research.
 
 ### Durable research history on Render
